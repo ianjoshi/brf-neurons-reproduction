@@ -1,9 +1,6 @@
-# torch==2.0.1
-torchvision==0.15.2
-
-tensorboard==2.11.0
-tensorflow==2.11.0  # Compatible with Python 3.10
-scipy==1.9.3
-tables==3.9.2
-numpy==1.24.4
+matplotlib==3.10.3
+scipy==1.15.3
+tensorboard==2.19.0
+torch==2.7.0
+torchvision==0.22.00
 -e .
