@@ -1,7 +1,7 @@
 import torch.nn
 import torchvision
 import tools
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, Subset
 from datetime import datetime
 import math
 import random
@@ -66,13 +66,20 @@ train_dataset = torchvision.datasets.MNIST(
 )
 
 total_dataset_size = len(train_dataset)
+# Get 40% of the data
+fraction = 0.4
+subset_size = int(total_dataset_size * fraction)
+
+# Randomly select indices for the 10% subset
+subset_indices = torch.randperm(total_dataset_size)[:subset_size]
+subset_dataset = Subset(train_dataset, subset_indices)
 
 # we use 5% - 10% of the training data for validation
-val_dataset_size = int(total_dataset_size * 0.1)
-train_dataset_size = total_dataset_size - val_dataset_size
+val_dataset_size = int(subset_size * 0.1)
+train_dataset_size = subset_size - val_dataset_size
 
 train_dataset, val_dataset = random_split(
-    train_dataset, [train_dataset_size, val_dataset_size]
+    subset_dataset, [train_dataset_size, val_dataset_size]
 )
 
 test_dataset = torchvision.datasets.MNIST(
@@ -145,8 +152,10 @@ b_offset_b = 1.
 out_adaptive_tau_mem_mean = 20.
 out_adaptive_tau_mem_std = 1. # 5.
 
-
-model = snn.models.SimpleResRNN(
+# CHANGE MODEL HERE TO CHANGE TRAINING
+# SimpleVanillaRFRNN
+# SimpleResRNN
+model = snn.models.SimpleVanillaRFRNN(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,
@@ -179,7 +188,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
 
 # Number of iterations per epoch
 total_steps = len(train_loader)
-epochs_num = 300
+epochs_num = 100
 padding = 0
 
 # learning rate scheduling
