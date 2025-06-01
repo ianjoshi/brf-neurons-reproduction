@@ -95,11 +95,11 @@ def plot_brf_parameters(base_dir, initial_model_filename, optimized_model_filena
 
 # === Example Usage ===
 if __name__ == "__main__":
-    base_dir = "experiments/ecg/models"
-    initial_model_file = "BRF_init.pt"
-    optimized_model_file = "BRF.pt"
+    base_dir = "experiments/smnist/models"
+    initial_model_file = "SMNIST_BRF_init.pt"
+    optimized_model_file = "SMNIST_BRF.pt"
     output_dir = "experiments/plots"
-    dataset_name = "ECG"
+    dataset_name = "SMNIST"
 
     # Clean solid dot colors
     initial_color = "#a8240c"

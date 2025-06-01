@@ -75,23 +75,23 @@ def plot_tensorboard_runs(base_dir, runs, dataset_name, output_dir, epochs=None)
 
 if __name__ == "__main__":
     base_dir = "experiments/smnist/runs"
-    dataset_name = "SMNIST"
+    dataset_name = "PSMNIST"
     output_dir = "experiments/plots"
     epochs = 150
 
     runs = [
+        # {
+        #     "folder": "May28_16-57-16_DESKTOP-JELMER3330_Adam(0.1),NLL,script-bw,LinLR,LL(False),PERMUTED(False),1,256,10,bs=256,ep=150,BRF_omega15.0_50.0b0.1_1.0,LI20.0_5.0",
+        #     "label": "RF",
+        #     "color": "#4a9600"
+        # },
         {
-            "folder": "May28_16-57-16_DESKTOP-JELMER3330_Adam(0.1),NLL,script-bw,LinLR,LL(False),PERMUTED(False),1,256,10,bs=256,ep=150,BRF_omega15.0_50.0b0.1_1.0,LI20.0_5.0",
-            "label": "RF",
-            "color": "#4a9600"
-        },
-        {
-            "folder": "May22_17-36-02_DESKTOP-JELMER4705_Adam(0.1),NLL,script-bw,LinLR,LL(False),PERMUTED(False),1,256,10,bs=256,ep=100,BRF_omega15.0_50.0b0.1_1.0,LI20.0_5.0",
+            "folder": "May30_09-57-44_DESKTOP-JELMER7985_Adam(0.1),NLL,script-bw,LinLR,LL(False),PERMUTED(True),1,256,10,bs=256,ep=150,BRF_omega15.0_50.0b0.1_1.0,LI20.0_5.0",
             "label": "BRF",
             "color": "#EE4B2B"
         },
         {
-            "folder": "May28_08-32-12_DESKTOP-JELMER6618_Adam(0.001),PERMUTED(False),LinearLR,NLL,LL(True),TBPTT(50),RSNN(1,256,10,bs_256,ep_150,h_o_bias),ALIF(tau_m(20.0,5.0),tau_a(200.0,50.0),linearMask(0.0))LI(tau_m(20.0,5.0))",
+            "folder": "May29_08-37-06_DESKTOP-JELMER3221_Adam(0.001),PERMUTED(True),LinearLR,NLL,LL(True),TBPTT(50),RSNN(1,256,10,bs_256,ep_150,h_o_bias),ALIF(tau_m(20.0,5.0),tau_a(200.0,50.0),linearMask(0.0))LI(tau_m(20.0,5.0))",
             "label": "ALIF",
             "color": "#0017ff"
         }
