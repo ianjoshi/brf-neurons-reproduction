@@ -5,6 +5,10 @@ import tools
 from datetime import datetime
 import math
 
+from collections import defaultdict
+import numpy as np
+
+
 import sys
 sys.path.append("../..")
 import snn
@@ -45,25 +49,34 @@ batch_size = 256  # (256 from Yin et al. 2021)
 val_batch_size = 256
 test_batch_size = 256
 
-train_dataset = torchvision.datasets.MNIST(
+# First, access the full training dataset
+full_dataset = torchvision.datasets.MNIST(
     root="data",
     train=True,
     transform=torchvision.transforms.ToTensor(),
     download=True
 )
 
-total_dataset_size = len(train_dataset)
-# Get 40% of the data
-fraction = 0.4
-subset_size = int(total_dataset_size * fraction)
+# Group indices by class
+class_indices = defaultdict(list)
+for idx, (_, label) in enumerate(full_dataset):
+    class_indices[label].append(idx)
 
-# Randomly select indices for the 10% subset
-subset_indices = torch.randperm(total_dataset_size)[:subset_size]
-subset_dataset = Subset(train_dataset, subset_indices)
+# Select fraction of data per class
+fraction = 0.5
+subset_indices = []
 
-# we use 5% - 10% of the training data for validation
-val_dataset_size = int(subset_size * 0.1)
-train_dataset_size = subset_size - val_dataset_size
+for cls, indices in class_indices.items():
+    n = int(len(indices) * fraction)
+    selected = np.random.choice(indices, n, replace=False)
+    subset_indices.extend(selected)
+
+# Create subset dataset
+subset_dataset = Subset(full_dataset, subset_indices)
+
+# Split into train/val
+val_dataset_size = int(len(subset_dataset) * 0.1)
+train_dataset_size = len(subset_dataset) - val_dataset_size
 
 train_dataset, val_dataset = random_split(
     subset_dataset, [train_dataset_size, val_dataset_size]
@@ -140,33 +153,16 @@ out_adaptive_tau_mem_std = 5.
 hidden_bias = True
 output_bias = True
 
-# tbptt_steps = 50
+tbptt_steps = 50
 
 criterion = torch.nn.NLLLoss()
-# SimpleALIFRNN
-# model = snn.models.SimpleALIFRNNTbptt(
-#     input_size=input_size,
-#     hidden_size=hidden_size,
-#     output_size=num_classes,
-#     mask_prob=mask_prob,
-#     criterion=criterion,
-#     adaptive_tau_mem_mean=adaptive_tau_mem_mean,
-#     adaptive_tau_mem_std=adaptive_tau_mem_std,
-#     adaptive_tau_adp_mean=adaptive_tau_adp_mean,
-#     adaptive_tau_adp_std=adaptive_tau_adp_std,
-#     out_adaptive_tau_mem_mean=out_adaptive_tau_mem_mean,
-#     out_adaptive_tau_mem_std=out_adaptive_tau_mem_std,
-#     label_last=label_last,
-#     hidden_bias=hidden_bias,
-#     output_bias=output_bias,
-#     tbptt_steps=tbptt_steps
-# ).to(device)
 
-model = snn.models.SimpleALIFRNN(
+model = snn.models.SimpleALIFRNNTbptt(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,
     mask_prob=mask_prob,
+    criterion=criterion,
     adaptive_tau_mem_mean=adaptive_tau_mem_mean,
     adaptive_tau_mem_std=adaptive_tau_mem_std,
     adaptive_tau_adp_mean=adaptive_tau_adp_mean,
@@ -175,9 +171,9 @@ model = snn.models.SimpleALIFRNN(
     out_adaptive_tau_mem_std=out_adaptive_tau_mem_std,
     label_last=label_last,
     hidden_bias=hidden_bias,
-    output_bias=output_bias
+    output_bias=output_bias,
+    tbptt_steps=tbptt_steps
 ).to(device)
-
 
 ################################################################
 # Setup experiment (optimizer etc.)
@@ -189,7 +185,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
 
 # Number of iterations per epoch
 total_steps = len(train_loader)
-epochs_num = 100
+epochs_num = 150
 padding = 0
 
 # learning rate scheduling
@@ -199,9 +195,9 @@ learning_rates = []
 rand_num = random.randint(1, 10000)
 
 # [logging] Only thing manually changed in the string: Optimizer, criterion and scheduler!
-opt_str = "{}_Adam({}),PERMUTED({}),LinearLR,NLL,LL({})".format(rand_num, optimizer_lr, PERMUTED, label_last)
+opt_str = "{}_Adam({}),PERMUTED({}),LinearLR,NLL,LL({}),TBPTT({})".format(rand_num, optimizer_lr, PERMUTED, label_last, tbptt_steps)
 net_str = "RSNN(1,256,10,bs_{},ep_{},h_o_bias)"\
-    .format(batch_size, epochs_num) 
+    .format(batch_size, epochs_num)
 unit_str = "ALIF(tau_m({},{}),tau_a({},{}),linearMask({}))LI(tau_m({},{}))"\
     .format(adaptive_tau_mem_mean, adaptive_tau_mem_std, adaptive_tau_adp_mean, adaptive_tau_adp_std, mask_prob,
             out_adaptive_tau_mem_mean, out_adaptive_tau_mem_std)
@@ -224,7 +220,7 @@ else:
 print(start_time, comment)
 
 save_path = "models/{}_".format(start_time) + opt_str + "," + net_str + "," + unit_str + ".pt"
-save_init_path = "models/{}init".format(start_time) + opt_str + "," + net_str + "," + unit_str + ".pt"
+save_init_path = "models/{}_init_".format(start_time) + opt_str + "," + net_str + "," + unit_str + ".pt"
 
 # save initial parameters for analysis
 torch.save({'model_state_dict': model.state_dict()}, save_init_path)
@@ -272,8 +268,7 @@ for epoch in range(epochs_num + 1):
             # Reshape targets (for MNIST it's a single pattern).
             targets = targets.to(device=device)
 
-            # outputs, loss, _ = model(inputs, targets.repeat((sequence_length, 1)), optimizer=None)
-            outputs, _, _ = model(inputs)
+            outputs, loss, _ = model(inputs, targets.repeat((sequence_length, 1)), optimizer=None)
 
             # for Label Last
             if label_last:
@@ -335,8 +330,7 @@ for epoch in range(epochs_num + 1):
             # Reshape targets (for MNIST it's a single pattern).
             targets = targets.to(device=device)
 
-            # outputs, loss, _ = model(inputs, targets.repeat((sequence_length, 1)), optimizer=None)
-            outputs, _, _ = model(inputs)
+            outputs, loss, _ = model(inputs, targets.repeat((sequence_length, 1)), optimizer=None)
 
             # for Label Last
             if label_last:
@@ -405,24 +399,17 @@ for epoch in range(epochs_num + 1):
             # Clear previous gradients
             optimizer.zero_grad()
 
-            # outputs, loss, _ = model(inputs, targets.repeat((sequence_length, 1)), optimizer)
-            outputs, _, _ = model(inputs)
+            outputs, loss, _ = model(inputs, targets.repeat((sequence_length, 1)), optimizer)
 
-            # Compute loss
+            # for Label Last
             if label_last:
-                loss = tools.apply_seq_loss(criterion=criterion, outputs=outputs, target=targets)
+                loss_value = loss / math.ceil(sequence_length / tbptt_steps)
             else:
-                loss = criterion(outputs.view(-1, num_classes), targets.repeat((sequence_length, 1)).view(-1))
-
-            loss_value = loss
+                loss_value = loss / sequence_length
 
             if math.isnan(loss_value):
                 end_training = True
                 break
-
-            # Backward pass and optimization
-            loss.backward()
-            optimizer.step()
 
             # Calculate batch accuracy
             batch_correct = tools.count_correct_predictions(outputs.mean(dim=0), targets)

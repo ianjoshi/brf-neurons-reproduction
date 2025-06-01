@@ -6,6 +6,9 @@ from datetime import datetime
 import math
 import random
 
+from collections import defaultdict
+import numpy as np
+
 import sys
 sys.path.append("../..")
 import snn
@@ -58,25 +61,34 @@ else:
     permuted_idx = torch.arange(sequence_length)
 
 
-train_dataset = torchvision.datasets.MNIST(
+# First, access the full training dataset
+full_dataset = torchvision.datasets.MNIST(
     root="data",
     train=True,
     transform=torchvision.transforms.ToTensor(),
     download=True
 )
 
-total_dataset_size = len(train_dataset)
-# Get 40% of the data
-fraction = 0.4
-subset_size = int(total_dataset_size * fraction)
+# Group indices by class
+class_indices = defaultdict(list)
+for idx, (_, label) in enumerate(full_dataset):
+    class_indices[label].append(idx)
 
-# Randomly select indices for the 10% subset
-subset_indices = torch.randperm(total_dataset_size)[:subset_size]
-subset_dataset = Subset(train_dataset, subset_indices)
+# Select fraction of data per class
+fraction = 0.5
+subset_indices = []
 
-# we use 5% - 10% of the training data for validation
-val_dataset_size = int(subset_size * 0.1)
-train_dataset_size = subset_size - val_dataset_size
+for cls, indices in class_indices.items():
+    n = int(len(indices) * fraction)
+    selected = np.random.choice(indices, n, replace=False)
+    subset_indices.extend(selected)
+
+# Create subset dataset
+subset_dataset = Subset(full_dataset, subset_indices)
+
+# Split into train/val
+val_dataset_size = int(len(subset_dataset) * 0.1)
+train_dataset_size = len(subset_dataset) - val_dataset_size
 
 train_dataset, val_dataset = random_split(
     subset_dataset, [train_dataset_size, val_dataset_size]
@@ -141,7 +153,7 @@ mask_prob = 0.
 
 # omega init uniform distribution
 omega_a = 15.
-omega_b = 85.
+omega_b = 50.
 
 
 # b_offset init uniform distribution
@@ -150,12 +162,12 @@ b_offset_b = 1.
 
 # LI alpha init normal distribution
 out_adaptive_tau_mem_mean = 20.
-out_adaptive_tau_mem_std = 1. # 5.
+out_adaptive_tau_mem_std = 5. # 5.
 
 # CHANGE MODEL HERE TO CHANGE TRAINING
 # SimpleVanillaRFRNN
 # SimpleResRNN
-model = snn.models.SimpleVanillaRFRNN(
+model = snn.models.SimpleResRNN(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,
@@ -188,7 +200,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
 
 # Number of iterations per epoch
 total_steps = len(train_loader)
-epochs_num = 100
+epochs_num = 150
 padding = 0
 
 # learning rate scheduling

@@ -77,11 +77,11 @@ if __name__ == "__main__":
     base_dir = "experiments/smnist/runs"
     dataset_name = "SMNIST"
     output_dir = "experiments/plots"
-    epochs = 100
+    epochs = 150
 
     runs = [
         {
-            "folder": "May22_15-25-38_DESKTOP-JELMER8630_Adam(0.1),NLL,script-bw,LinLR,LL(False),PERMUTED(False),1,256,10,bs=256,ep=100,BRF_omega15.0_50.0b0.1_1.0,LI20.0_5.0",
+            "folder": "May28_16-57-16_DESKTOP-JELMER3330_Adam(0.1),NLL,script-bw,LinLR,LL(False),PERMUTED(False),1,256,10,bs=256,ep=150,BRF_omega15.0_50.0b0.1_1.0,LI20.0_5.0",
             "label": "RF",
             "color": "#4a9600"
         },
@@ -91,7 +91,7 @@ if __name__ == "__main__":
             "color": "#EE4B2B"
         },
         {
-            "folder": "May26_08-54-50_DESKTOP-JELMER3047_Adam(0.001),PERMUTED(False),LinearLR,NLL,LL(True),RSNN(1,256,10,bs_256,ep_100,h_o_bias),ALIF(tau_m(20.0,5.0),tau_a(200.0,50.0),linearMask(0.0))LI(tau_m(20.0,5.0))",
+            "folder": "May28_08-32-12_DESKTOP-JELMER6618_Adam(0.001),PERMUTED(False),LinearLR,NLL,LL(True),TBPTT(50),RSNN(1,256,10,bs_256,ep_150,h_o_bias),ALIF(tau_m(20.0,5.0),tau_a(200.0,50.0),linearMask(0.0))LI(tau_m(20.0,5.0))",
             "label": "ALIF",
             "color": "#0017ff"
         }
