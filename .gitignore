@@ -136,6 +136,7 @@ ENV/
 env.bak/
 venv.bak/
 brf-venv/
+gsc-venv/
 
 # Spyder project settings
 .spyderproject
@@ -178,3 +179,10 @@ cython_debug/
 /models/
 data/*
 !data/.gitkeep
+
+# TODO
+TODO.txt
+
+# Google Speech Commands
+google-speech-commands/data
+google-speech-commands/data/*
