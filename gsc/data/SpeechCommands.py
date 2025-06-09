@@ -94,11 +94,6 @@ class SpeechCommands(Dataset):
                     print(f"Warning: File does not exist: {full_path}")
 
         print(f"Total files in dataset_walker: {len(dataset_walker)}")
-        print(f"Sample dataset_walker paths: {dataset_walker[:5]}")
-
-        # Debug: Print sample paths from split lists
-        print(f"Sample val_list paths: {val_list[:5]}")
-        print(f"Sample test_list paths: {test_list[:5]}")
 
         # Build walker list based on selected subset
         if subset == "training":
@@ -112,9 +107,6 @@ class SpeechCommands(Dataset):
         else:  # "testing"
             self._walker = test_list
             print(f"Created testing split with {len(self._walker)} files")
-
-        # Debug: Print sample walker paths
-        print(f"Sample walker paths for {subset}: {self._walker[:5]}")
 
         # Store transforms
         self.transform = transform

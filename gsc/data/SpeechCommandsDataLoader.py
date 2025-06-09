@@ -49,7 +49,12 @@ class SpeechCommandsDataLoader:
         print(f"Detected {self.num_classes} unique labels")
 
         # Shared transforms
-        self.mfcc_transform = MFCC(sample_rate=16000, n_mfcc=13, log_mels=True)
+        self.mfcc_transform = MFCC(
+            sample_rate=16000,
+            n_mfcc=13,
+            log_mels=True,
+            melkwargs={"n_mels": 40, "n_fft": 400})
+        
         self.label_transform = OneHotTargetTransform(
             label_to_index=self.label_to_index,
             sequence_length=self.sequence_length,
