@@ -1,7 +1,7 @@
 matplotlib==3.10.3
 scipy==1.15.3
 tensorboard==2.19.0
-torch==2.7.0
+torch==2.7.1
 torchaudio==2.7.1
 torchvision==0.22.1
 -e .

@@ -1,11 +1,12 @@
 import pathlib
+import os
 from typing import Callable, Optional, Tuple
 
 import torch
-from torch.utils.data import Dataset, DataLoader
+import torch.nn.functional as F
+import torchaudio
+from torch.utils.data import Dataset
 from torchaudio.datasets import SPEECHCOMMANDS
-from torchaudio.transforms import MFCC
-
 
 class SpeechCommands(Dataset):
     """
@@ -24,7 +25,8 @@ class SpeechCommands(Dataset):
     - transform (Callable[[torch.Tensor], torch.Tensor], optional): A function/transform that takes a waveform 
       tensor and returns a transformed version. Common transforms include MFCC, spectrogram, or mel spectrogram.
     - target_transform (Callable[[str], Any], optional): A function/transform that takes a label string and 
-      returns a transformed version. Often used to convert string labels to numerical indices.
+      returns a transformed version. Often used to convert string labels to numerical indices or one-hot encodings.
+    - sequence_length (int): Desired fixed length of each sample sequence (for SNN input). Defaults to 1300.
     - download (bool): If True, downloads the dataset from the internet and puts it in root directory.
       If dataset is already downloaded, it is not downloaded again. Defaults to True.
 
@@ -32,7 +34,7 @@ class SpeechCommands(Dataset):
     - transform (Callable or None): The transform applied to each waveform.
     - target_transform (Callable or None): The transform applied to each label.
     - _dataset (SPEECHCOMMANDS): The underlying torchaudio dataset instance.
-    - _walker (list[pathlib.Path]): List of paths to audio files in the selected subset.
+    - _walker (list[str]): List of relative paths to audio files in the selected subset.
     """
 
     # Official split definition files provided with the dataset
@@ -45,6 +47,7 @@ class SpeechCommands(Dataset):
         subset: str = "training",
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
+        sequence_length: int = 1300,
         download: bool = True,
     ) -> None:
         print(f"\nInitializing SpeechCommands with subset={subset}")
@@ -54,13 +57,13 @@ class SpeechCommands(Dataset):
             raise ValueError("subset must be 'training', 'validation', or 'testing'")
 
         # Ensure root directory exists before download
-        root = pathlib.Path(root)
-        root.mkdir(parents=True, exist_ok=True)
-        print(f"Using root directory: {root}")
+        self.root = pathlib.Path(root)
+        self.root.mkdir(parents=True, exist_ok=True)
+        print(f"Using root directory: {self.root}")
 
         # Initialize base dataset
         print("Loading base SPEECHCOMMANDS dataset...")
-        self._dataset = SPEECHCOMMANDS(root=str(root), download=download)
+        self._dataset = SPEECHCOMMANDS(root=str(self.root), download=download)
         print("Base dataset loaded successfully")
 
         # Load official split definitions
@@ -69,11 +72,39 @@ class SpeechCommands(Dataset):
         test_list = self._load_split_list(self._TEST_FILE)
         print(f"Found {len(val_list)} validation files and {len(test_list)} test files")
 
+        # Normalize dataset walker paths to use forward slashes and ensure relative paths
+        dataset_root = pathlib.Path(self._dataset._path)
+        dataset_walker = []
+        for p in self._dataset._walker:
+            try:
+                # Try to make the path relative to dataset_root
+                rel_path = str(pathlib.Path(p).relative_to(dataset_root).as_posix())
+                full_path = dataset_root / rel_path
+                if full_path.exists():
+                    dataset_walker.append(rel_path)
+                else:
+                    print(f"Warning: File does not exist: {full_path}")
+            except ValueError:
+                # If relative_to fails, assume p is already relative
+                rel_path = str(pathlib.Path(p).as_posix())
+                full_path = dataset_root / rel_path
+                if full_path.exists():
+                    dataset_walker.append(rel_path)
+                else:
+                    print(f"Warning: File does not exist: {full_path}")
+
+        print(f"Total files in dataset_walker: {len(dataset_walker)}")
+        print(f"Sample dataset_walker paths: {dataset_walker[:5]}")
+
+        # Debug: Print sample paths from split lists
+        print(f"Sample val_list paths: {val_list[:5]}")
+        print(f"Sample test_list paths: {test_list[:5]}")
+
         # Build walker list based on selected subset
         if subset == "training":
             # Training set consists of all files not in validation or test sets
             exclude = set(val_list + test_list)
-            self._walker = [p for p in self._dataset._walker if p not in exclude]
+            self._walker = [p for p in dataset_walker if p not in exclude]
             print(f"Created training split with {len(self._walker)} files")
         elif subset == "validation":
             self._walker = val_list
@@ -82,15 +113,23 @@ class SpeechCommands(Dataset):
             self._walker = test_list
             print(f"Created testing split with {len(self._walker)} files")
 
+        # Debug: Print sample walker paths
+        print(f"Sample walker paths for {subset}: {self._walker[:5]}")
+
         # Store transforms
         self.transform = transform
         self.target_transform = target_transform
+        self.sequence_length = sequence_length
+
         if transform:
             print("Waveform transform will be applied")
         if target_transform:
             print("Label transform will be applied")
 
-    def _load_split_list(self, filename: str) -> list[pathlib.Path]:
+        if len(self._walker) == 0:
+            raise ValueError(f"No files found for {subset} split. Check dataset integrity or split files.")
+
+    def _load_split_list(self, filename: str) -> list[str]:
         """
         Load and parse one of the official split definition files.
 
@@ -98,14 +137,15 @@ class SpeechCommands(Dataset):
         - filename (str): Name of the split definition file (e.g., "validation_list.txt")
 
         Returns:
-        - list[pathlib.Path]: List of absolute paths to WAV files in the specified split.
+        - list[str]: List of relative paths to WAV files in the specified split.
         """
         txt_path = pathlib.Path(self._dataset._path) / filename
         print(f"Loading split list from {filename}")
         
         try:
             with txt_path.open() as f:
-                paths = [pathlib.Path(self._dataset._path) / line.strip() for line in f]
+                # Normalize paths to use forward slashes and ensure they are relative
+                paths = [str(pathlib.Path(line.strip()).as_posix()) for line in f if line.strip()]
             print(f"Successfully loaded {len(paths)} paths from {filename}")
             return paths
         except FileNotFoundError:
@@ -114,6 +154,23 @@ class SpeechCommands(Dataset):
         except Exception as e:
             print(f"Error loading split list from {filename}: {str(e)}")
             raise
+
+    def _fix_length(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Pad or truncate the time dimension of a tensor to `self.sequence_length`.
+
+        Parameters:
+        - x (Tensor): Input tensor with shape [time, features].
+
+        Returns:
+        - Tensor: Output tensor with shape [sequence_length, features].
+        """
+        if x.size(0) > self.sequence_length:
+            return x[:self.sequence_length]
+        elif x.size(0) < self.sequence_length:
+            pad_size = self.sequence_length - x.size(0)
+            return F.pad(x, (0, 0, 0, pad_size))  # Pad on the time axis
+        return x
 
     def __len__(self) -> int:
         """
@@ -124,7 +181,7 @@ class SpeechCommands(Dataset):
         """
         return len(self._walker)
 
-    def __getitem__(self, index: int) -> Tuple[torch.Tensor, str]:
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Get a single sample from the dataset.
 
@@ -132,40 +189,43 @@ class SpeechCommands(Dataset):
         - index (int): Index of the sample to retrieve.
 
         Returns:
-        - Tuple[torch.Tensor, str]: A tuple containing:
-            - waveform: The audio waveform tensor
-            - label: The corresponding label (string or transformed value)
+        - Tuple[torch.Tensor, torch.Tensor]: A tuple containing:
+            - waveform: The MFCC/padded tensor of shape [sequence_length, input_size]
+            - label: One-hot or class label tensor of shape [sequence_length, num_classes]
         """
         try:
-            # Load raw waveform and label from base dataset
-            waveform, _, label, *_ = self._dataset[self._walker[index]]
+            # Get the relative path for this index
+            rel_path = self._walker[index]
+            
+            # Construct the full path correctly
+            full_path = str(pathlib.Path(self._dataset._path) / rel_path)
+            print(f"Constructed full path: {full_path}")  # Debug print
+            
+            # Verify file exists
+            if not pathlib.Path(full_path).exists():
+                raise FileNotFoundError(f"Audio file not found: {full_path}")
+            
+            # Load the audio file directly using torchaudio
+            waveform, _ = torchaudio.load(full_path)
+            
+            # Get the label from the parent directory name
+            label = pathlib.Path(rel_path).parent.name
+            
             print(f"Loaded sample {index}: label={label}, waveform shape={waveform.shape}")
 
-            # Apply optional transforms if specified
+            # Apply transform (e.g., MFCC)
             if self.transform:
-                waveform = self.transform(waveform)
+                waveform = self.transform(waveform)  # shape: [1, n_mfcc, time]
+                waveform = waveform.squeeze(0).transpose(0, 1)  # [time, n_mfcc]
+                waveform = self._fix_length(waveform)
                 print(f"Applied waveform transform, new shape={waveform.shape}")
+
+            # Apply target transform (e.g., one-hot + repeat)
             if self.target_transform:
                 label = self.target_transform(label)
-                print(f"Applied label transform, new label={label}")
+                print(f"Applied label transform, new label shape={label.shape}")
 
             return waveform, label
         except Exception as e:
             print(f"Error loading sample {index}: {str(e)}")
             raise
-
-
-# Example usage
-if __name__ == "__main__":
-    # Create dataset instance
-    train_ds = SpeechCommands(
-        pathlib.Path("./google-speech-commands/data"),
-        subset="training"
-    )
-
-    # Create DataLoader and inspect a batch
-    loader = DataLoader(train_ds, batch_size=4, shuffle=True)
-    batch_wave, batch_label = next(iter(loader))
-    print(f"\nSuccessfully loaded batch:")
-    print(f"Waveform shape: {batch_wave.shape}")
-    print(f"Labels: {batch_label}")

@@ -184,5 +184,5 @@ data/*
 TODO.txt
 
 # Google Speech Commands
-google-speech-commands/data
-google-speech-commands/data/*
+gcs-experiments/data
+gcs-experiments/data/*
