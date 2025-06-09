@@ -98,7 +98,7 @@ class SpeechCommandsDataLoader:
 if __name__ == "__main__":
     # Instantiate the loader class
     loader_factory = SpeechCommandsDataLoader(
-        root="./gcs-experiments/data",
+        root="./gsc-experiments/data",
         sequence_length=1300,
         batch_size=4,
         num_workers=2,
