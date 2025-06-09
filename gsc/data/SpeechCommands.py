@@ -206,7 +206,7 @@ class SpeechCommands(Dataset):
                 raise FileNotFoundError(f"Audio file not found: {full_path}")
             
             # Load the audio file directly using torchaudio
-            waveform, _ = torchaudio.load(full_path)
+            waveform, _ = torchaudio.load(full_path, backend="soundfile")
             
             # Get the label from the parent directory name
             label = pathlib.Path(rel_path).parent.name
