@@ -51,6 +51,9 @@ class SpeechCommands(Dataset):
         download: bool = True,
     ) -> None:
         print(f"\nInitializing SpeechCommands with subset={subset}")
+
+        # Print available audio backends
+        print(f"Available torchaudio backends: {torchaudio.list_audio_backends()}")
         
         # Validate subset parameter
         if subset not in {"training", "validation", "testing"}:
