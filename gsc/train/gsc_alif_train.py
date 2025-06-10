@@ -45,8 +45,11 @@ hidden_size = 36
 num_classes = 35
 
 train_batch_size = 4
-val_batch_size = 9981 
+val_batch_size = 9981
 test_batch_size = 11005
+train_dataset_size = 84843
+val_dataset_size = 9981
+test_dataset_size = 11005
 
 loader_factory = SpeechCommandsDataLoader(
     root="./gsc-experiments/data",
@@ -125,11 +128,13 @@ scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch_count: 1. - epoch_count /
 
 # Logging
 opt_str = "{}_Adam({}),NLL,LinearLR,no_gc".format(rand_num, optimizer_lr)
-net_str = "RSNN(4,36,6,sub_seq_{},bs_{},ep_{},h_o_bias(True))"\
-    .format(sub_seq_length, train_batch_size, epochs_num)
-unit_str = "ALIF(tau_m({},{}),tau_a({},{}),linMask_{})LI(tau_m({},{}))"\
-    .format(adaptive_tau_mem_mean, adaptive_tau_mem_std, adaptive_tau_adp_mean, adaptive_tau_adp_std, mask_prob,
-            out_adaptive_tau_mem_mean, out_adaptive_tau_mem_std)
+net_str = "RSNN(4,36,6,sub_seq_{},bs_{},ep_{},h_o_bias(True))".format(
+    sub_seq_length, train_batch_size, epochs_num
+)
+unit_str = "ALIF(tau_m({},{}),tau_a({},{}),linMask_{})LI(tau_m({},{}))".format(
+    adaptive_tau_mem_mean, adaptive_tau_mem_std, adaptive_tau_adp_mean, adaptive_tau_adp_std, mask_prob,
+    out_adaptive_tau_mem_mean, out_adaptive_tau_mem_std
+)
 
 comment = opt_str + "," + net_str + "," + unit_str
 
@@ -200,7 +205,7 @@ for epoch in range(epochs_num + 1):
             val_pbar.set_postfix({'loss': f'{val_loss_value:.4f}'})
 
         val_loss /= total_val_steps
-        val_acc = (val_correct / total_val_steps) * 100.0
+        val_acc = (val_correct / (val_dataset_size * (sequence_length - sub_seq_length))) * 100.0
 
         # Log current val loss and accuracy
         writer.add_scalar("Loss/val", val_loss, epoch)
@@ -258,7 +263,7 @@ for epoch in range(epochs_num + 1):
             test_pbar.set_postfix({'loss': f'{test_loss_value:.4f}'})
 
         test_loss /= total_test_steps
-        test_acc = (test_correct / total_test_steps) * 100.0
+        test_acc = (test_correct / (test_dataset_size * (sequence_length - sub_seq_length))) * 100.0
 
         # Log current test loss and accuracy
         writer.add_scalar("Loss/test", test_loss, epoch)
@@ -335,7 +340,9 @@ for epoch in range(epochs_num + 1):
             })
 
         print_train_loss /= total_train_steps
-        print_acc = (print_train_correct / total_train_steps) * 100.0
+        print_acc = (
+            print_train_correct / (train_dataset_size * (sequence_length - sub_seq_length))
+        ) * 100.0
 
         print(
             f"\nTraining Results:"
@@ -357,9 +364,3 @@ for epoch in range(epochs_num + 1):
 print('\nTraining completed!')
 print(f'Best validation loss: {min_val_loss:.6f} at epoch {min_val_epoch}')
 print(f'Total training time: {tools.PerformanceCounter.time(run_time) / 3600:.2f} hours')
-
-
-
-
-
-

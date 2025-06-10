@@ -49,6 +49,9 @@ num_classes = 35
 train_batch_size = 16
 val_batch_size = 9981  # Full validation split
 test_batch_size = 11005  # Full test split
+train_dataset_size = 84843
+val_dataset_size = 9981
+test_dataset_size = 11005
 
 loader_factory = SpeechCommandsDataLoader(
     root="./gsc-experiments/data",
@@ -123,7 +126,7 @@ comment = opt_str + "," + net_str + "," + unit_str
 
 writer = SummaryWriter(comment=comment)
 
-start_time = datetime.now().strftime("%m-%d_%H-%M-%S")
+start_time = datetime.now().strftime("%m-%d_%H-%M-SS")
 print(f"\nTraining started at: {start_time}")
 print(f"Configuration: {comment}")
 print(f"\nModel architecture:\n{model}")
@@ -184,8 +187,8 @@ for epoch in range(epochs_num + 1):
             val_pbar.set_postfix({'loss': f'{val_loss_value:.4f}'})
 
         val_loss /= total_val_steps
-        val_acc = (val_correct / total_val_steps) * 100.0
-        val_sop = val_total_spikes / val_batch_size
+        val_acc = (val_correct / (val_dataset_size * (sequence_length - sub_seq_length))) * 100.0
+        val_sop = val_total_spikes / val_dataset_size
 
         writer.add_scalar("Loss/val", val_loss, epoch)
         writer.add_scalar("accuracy/val", val_acc, epoch)
@@ -243,8 +246,8 @@ for epoch in range(epochs_num + 1):
             test_pbar.set_postfix({'loss': f'{test_loss_value:.4f}'})
 
         test_loss /= total_test_steps
-        test_acc = (test_correct / total_test_steps) * 100.0
-        test_sop = test_total_spikes / test_batch_size
+        test_acc = (test_correct / (test_dataset_size * (sequence_length - sub_seq_length))) * 100.0
+        test_sop = test_total_spikes / test_dataset_size
 
         writer.add_scalar("Loss/test", test_loss, epoch)
         writer.add_scalar("accuracy/test", test_acc, epoch)
@@ -320,7 +323,9 @@ for epoch in range(epochs_num + 1):
             iteration += 1
 
         print_train_loss /= total_train_steps
-        print_acc = (print_train_correct / total_train_steps) * 100.0
+        print_acc = (
+            print_train_correct / (train_dataset_size * (sequence_length - sub_seq_length))
+        ) * 100.0
 
         print(
             f"\nTraining Results:"
