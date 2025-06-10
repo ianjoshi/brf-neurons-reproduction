@@ -46,7 +46,7 @@ input_size = 13
 hidden_size = 36
 num_classes = 35
 
-train_batch_size = 16  # From original gsc_rf_train.py
+train_batch_size = 16
 val_batch_size = 9981  # Full validation split
 test_batch_size = 11005  # Full test split
 
