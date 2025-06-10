@@ -23,6 +23,8 @@ import random
 ###################################################################
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if not torch.cuda.is_available():
+    print("Warning: CUDA not available. Running on CPU may be slow.")
 
 if device == "cuda":
     pin_memory = True
@@ -44,9 +46,9 @@ input_size = 13
 hidden_size = 36
 num_classes = 35
 
-train_batch_size = 4
-val_batch_size = 9981 
-test_batch_size = 11005
+train_batch_size = 16  # From original gsc_rf_train.py
+val_batch_size = 9981  # Full validation split
+test_batch_size = 11005  # Full test split
 
 loader_factory = SpeechCommandsDataLoader(
     root="./gsc-experiments/data",
@@ -62,74 +64,60 @@ train_loader, val_loader, test_loader = loader_factory.get_loaders()
 preprocessor = Preprocessor(normalize_inputs=False)
 
 ####################################################################
-# Model setup
+# Model Setup
 ####################################################################
 
-# Fraction of elements in hidden.linear.weight to be zero
 mask_prob = 0.0
-
-# ALIF alpha tau_mem init normal distribution
-adaptive_tau_mem_mean = 20.0
-adaptive_tau_mem_std = 0.5
-
-# ALIF rho tau_adp init normal distribution
-adaptive_tau_adp_mean = 7.0
-adaptive_tau_adp_std = 0.2
-
-# LI alpha tau_mem init normal distribution
+omega_mean = 3.0
+omega_std = 5.0
+b_offset_a = 0.1
+b_offset_b = 1.0
 out_adaptive_tau_mem_mean = 20.0
-out_adaptive_tau_mem_std = 0.5
+out_adaptive_tau_mem_std = 1.0
+sub_seq_length = 0
+dt = 0.01
 
-sub_seq_length = 10
-
-hidden_bias = True
-output_bias = True
-
-model = snn.models.SimpleALIFRNN(
+model = snn.models.SimpleResRNN(
     input_size=input_size,
     hidden_size=hidden_size,
     output_size=num_classes,
-    mask_prob=mask_prob,
-    adaptive_tau_mem_mean=adaptive_tau_mem_mean,
-    adaptive_tau_mem_std=adaptive_tau_mem_std,
-    adaptive_tau_adp_mean=adaptive_tau_adp_mean,
-    adaptive_tau_adp_std=adaptive_tau_adp_std,
+    adaptive_omega_a=omega_mean,
+    adaptive_omega_b=omega_std,
+    adaptive_b_offset_a=b_offset_a,
+    adaptive_b_offset_b=b_offset_b,
     out_adaptive_tau_mem_mean=out_adaptive_tau_mem_mean,
     out_adaptive_tau_mem_std=out_adaptive_tau_mem_std,
     sub_seq_length=sub_seq_length,
-    hidden_bias=hidden_bias,
-    output_bias=output_bias
+    output_bias=False,
 ).to(device)
+
+# Optimize model with torch.jit
+model = torch.jit.script(model)
 
 ####################################################################
 # Setup Experiment (Optimizer etc.)
 ####################################################################
 
-# Prevent overwriting in slurm
 rand_num = random.randint(1, 10000)
-
 criterion = torch.nn.NLLLoss()
-
-optimizer_lr = 0.05
+optimizer_lr = 0.1
+gradient_clip_value = 1.0
 optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
 
-# Number of iterations per epoch
 total_train_steps = len(train_loader)
 total_val_steps = len(val_loader)
 total_test_steps = len(test_loader)
 
 epochs_num = 400
 
-# Learning rate scheduling
 scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch_count: 1. - epoch_count / epochs_num)
 
-# Logging
-opt_str = "{}_Adam({}),NLL,LinearLR,no_gc".format(rand_num, optimizer_lr)
-net_str = "RSNN(4,36,6,sub_seq_{},bs_{},ep_{},h_o_bias(True))"\
-    .format(sub_seq_length, train_batch_size, epochs_num)
-unit_str = "ALIF(tau_m({},{}),tau_a({},{}),linMask_{})LI(tau_m({},{}))"\
-    .format(adaptive_tau_mem_mean, adaptive_tau_mem_std, adaptive_tau_adp_mean, adaptive_tau_adp_std, mask_prob,
-            out_adaptive_tau_mem_mean, out_adaptive_tau_mem_std)
+opt_str = "{}_Adam({}),script-bw,NLL,LinearLR,no_gc".format(rand_num, optimizer_lr)
+net_str = "13,{},35,bs={},ep={}".format(hidden_size, train_batch_size, epochs_num)
+unit_str = "BRF(omega{},{},b{},{})LI({},{})".format(
+    omega_mean, omega_std, b_offset_a, b_offset_b,
+    out_adaptive_tau_mem_mean, out_adaptive_tau_mem_std
+)
 
 comment = opt_str + "," + net_str + "," + unit_str
 
@@ -138,19 +126,15 @@ writer = SummaryWriter(comment=comment)
 start_time = datetime.now().strftime("%m-%d_%H-%M-%S")
 print(f"\nTraining started at: {start_time}")
 print(f"Configuration: {comment}")
-print(f"\nModel architecture:")
-print(model)
-print("\nModel parameters:")
-print(model.state_dict())
+print(f"\nModel architecture:\n{model}")
 
 save_path = "./gsc-experiments/models/{}_".format(start_time) + comment + ".pt"
 save_init_path = "./gsc-experiments/models/{}_init_".format(start_time) + comment + ".pt"
 
-# Save initial parameters for analysis
 torch.save({'model_state_dict': model.state_dict()}, save_init_path)
 
 min_val_loss = float('inf')
-loss_value = 1.0 # Dummy init for val.
+loss_value = 1.0
 iteration = 0
 end_training = False
 
@@ -166,13 +150,13 @@ for epoch in range(epochs_num + 1):
     print(f"Epoch {epoch}/{epochs_num}")
     print(f"{'='*50}")
     
-    # Evaluation mode for validation and testing
     model.eval()
 
     with torch.no_grad():
         # Validation
         val_loss = 0
         val_correct = 0
+        val_total_spikes = torch.tensor(0.0).to(device)
         print("\nRunning validation...")
         
         val_pbar = tqdm(val_loader, desc="Validation", leave=False)
@@ -181,7 +165,8 @@ for epoch in range(epochs_num + 1):
             inputs = inputs.to(device)
             targets = targets.to(device)
 
-            outputs = model(inputs)[0]
+            outputs, _, num_spikes = model(inputs)
+            val_total_spikes += num_spikes.item()
 
             loss = tools.apply_seq_loss(
                 criterion=criterion,
@@ -196,21 +181,19 @@ for epoch in range(epochs_num + 1):
                 targets=targets[sub_seq_length:, :, :]
             )
             
-            # Update progress bar with current loss
             val_pbar.set_postfix({'loss': f'{val_loss_value:.4f}'})
 
         val_loss /= total_val_steps
         val_acc = (val_correct / total_val_steps) * 100.0
+        val_sop = val_total_spikes / val_batch_size
 
-        # Log current val loss and accuracy
         writer.add_scalar("Loss/val", val_loss, epoch)
         writer.add_scalar("accuracy/val", val_acc, epoch)
+        writer.add_scalar("sop/val", val_sop, epoch)
 
-        # Save current best model.
         if val_loss <= min_val_loss:
             min_val_loss = val_loss
             min_val_epoch = epoch
-            saved_best_model = model.state_dict()
             torch.save(
                 {
                     'epoch': epoch,
@@ -225,12 +208,14 @@ for epoch in range(epochs_num + 1):
             f"\nValidation Results:"
             f"\n  Loss: {val_loss:.6f}"
             f"\n  Accuracy: {val_acc:.4f}%"
+            f"\n  SOP: {val_sop:.2f}"
             f"\n  Best loss so far: {min_val_loss:.6f} (epoch {min_val_epoch})"
         )
 
         # Testing
         test_loss = 0
         test_correct = 0
+        test_total_spikes = torch.tensor(0.0).to(device)
         print("\nRunning testing...")
         
         test_pbar = tqdm(test_loader, desc="Testing", leave=False)
@@ -239,7 +224,8 @@ for epoch in range(epochs_num + 1):
             inputs = inputs.to(device)
             targets = targets.to(device)
 
-            outputs = model(inputs)[0]
+            outputs, _, num_spikes = model(inputs)
+            test_total_spikes += num_spikes.item()
 
             loss = tools.apply_seq_loss(
                 criterion=criterion,
@@ -254,53 +240,48 @@ for epoch in range(epochs_num + 1):
                 targets=targets[sub_seq_length:, :, :]
             )
             
-            # Update progress bar with current loss
             test_pbar.set_postfix({'loss': f'{test_loss_value:.4f}'})
 
         test_loss /= total_test_steps
         test_acc = (test_correct / total_test_steps) * 100.0
+        test_sop = test_total_spikes / test_batch_size
 
-        # Log current test loss and accuracy
         writer.add_scalar("Loss/test", test_loss, epoch)
         writer.add_scalar("accuracy/test", test_acc, epoch)
+        writer.add_scalar("sop/test", test_sop, epoch)
 
         print(
             f"\nTest Results:"
             f"\n  Loss: {test_loss:.6f}"
             f"\n  Accuracy: {test_acc:.4f}%"
+            f"\n  SOP: {test_sop:.2f}"
         )
 
     print(
         "Epoch [{:4d}/{:4d}]  |  Summary | Loss/val: {:.6f}, Accuracy/val: {:8.4f}  | "
-        " Loss/test: {:.6f}, Accuracy/test: {:8.4f}"
-        .format(epoch, epochs_num, val_loss, val_acc, test_loss, test_acc),
+        "Loss/test: {:.6f}, Accuracy/test: {:8.4f} | SOP: {:.2f}"
+        .format(epoch, epochs_num, val_loss, val_acc, test_loss, test_acc, test_sop),
         flush=True
     )
 
-    # Update logging outputs
     writer.flush()
 
-    # Training
-    # Run training from 0 to 399 epochs
     if epoch < epochs_num:
         print("\nStarting training phase...")
         print_train_loss = 0
         print_train_correct = 0
-
-        # Go to training mode
         model.train()
         
         train_pbar = tqdm(train_loader, desc="Training", leave=False)
         for i, (inputs, targets) in enumerate(train_pbar):
             current_batch_size = len(inputs)
             inputs, targets = preprocessor.process_batch(inputs, targets)
-            inputs, targets = inputs.to(device), targets.to(device)
+            inputs = inputs.to(device)
+            targets = targets.to(device)
 
-            # Clear gradients
             optimizer.zero_grad()
-            outputs = model(inputs)[0]
+            outputs, _, _ = model(inputs)
 
-            # Accumulate loss for each time step and batch
             loss = tools.apply_seq_loss(
                 criterion=criterion,
                 outputs=outputs,
@@ -308,16 +289,12 @@ for epoch in range(epochs_num + 1):
             )
             loss_value = loss.item() / (sequence_length - sub_seq_length)
 
-            # Calculate the gradients
             loss.backward()
-
-            # Perform learning step
+            torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_value)
             optimizer.step()
 
-            # Sum up loss_value for each iteration
             print_train_loss += loss_value
 
-            # Calculate batch accuracy
             batch_correct = tools.count_correct_prediction(
                 predictions=outputs,
                 targets=targets[sub_seq_length:, :, :]
@@ -328,11 +305,19 @@ for epoch in range(epochs_num + 1):
                 batch_correct / (current_batch_size * (sequence_length - sub_seq_length))
             ) * 100.0
 
-            # Update progress bar with current metrics
+            writer.add_scalar("Loss/train", loss_value, iteration)
+            writer.add_scalar("accuracy/train", batch_accuracy, iteration)
+
             train_pbar.set_postfix({
                 'loss': f'{loss_value:.4f}',
                 'acc': f'{batch_accuracy:.2f}%'
             })
+
+            if math.isnan(loss_value):
+                end_training = True
+                break
+
+            iteration += 1
 
         print_train_loss /= total_train_steps
         print_acc = (print_train_correct / total_train_steps) * 100.0
@@ -344,22 +329,12 @@ for epoch in range(epochs_num + 1):
             f"\n  Learning rate: {scheduler.get_last_lr()[0]:.6f}"
         )
 
-        # Update logging outputs
         writer.flush()
-
-        # Apply learning rate scheduling
         scheduler.step()
 
-        if math.isnan(loss_value):
-            end_training = True
-            break
+    if end_training:
+        break
 
 print('\nTraining completed!')
 print(f'Best validation loss: {min_val_loss:.6f} at epoch {min_val_epoch}')
 print(f'Total training time: {tools.PerformanceCounter.time(run_time) / 3600:.2f} hours')
-
-
-
-
-
-
