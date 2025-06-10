@@ -194,7 +194,6 @@ class SpeechCommands(Dataset):
             
             # Construct the full path correctly
             full_path = str(pathlib.Path(self._dataset._path) / rel_path)
-            print(f"Constructed full path: {full_path}")  # Debug print
             
             # Verify file exists
             if not pathlib.Path(full_path).exists():
@@ -205,20 +204,16 @@ class SpeechCommands(Dataset):
             
             # Get the label from the parent directory name
             label = pathlib.Path(rel_path).parent.name
-            
-            print(f"Loaded sample {index}: label={label}, waveform shape={waveform.shape}")
 
             # Apply transform (e.g., MFCC)
             if self.transform:
                 waveform = self.transform(waveform)  # shape: [1, n_mfcc, time]
                 waveform = waveform.squeeze(0).transpose(0, 1)  # [time, n_mfcc]
                 waveform = self._fix_length(waveform)
-                print(f"Applied waveform transform, new shape={waveform.shape}")
 
             # Apply target transform (e.g., one-hot + repeat)
             if self.target_transform:
                 label = self.target_transform(label)
-                print(f"Applied label transform, new label shape={label.shape}")
 
             return waveform, label
         except Exception as e:

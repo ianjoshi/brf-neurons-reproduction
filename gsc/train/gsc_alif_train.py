@@ -46,7 +46,7 @@ val_batch_size = 9981
 test_batch_size = 11005
 
 loader_factory = SpeechCommandsDataLoader(
-    root="./gcs-experiments/data",
+    root="./gsc-experiments/data",
     sequence_length=sequence_length,
     batch_size=train_batch_size,
     num_workers=num_workers,
