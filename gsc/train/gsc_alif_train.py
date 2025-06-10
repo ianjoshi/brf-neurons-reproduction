@@ -30,7 +30,9 @@ else:
     pin_memory = False
     num_workers = 0
 
-print(device)
+print(f"Using device: {device}")
+print(f"Number of workers: {num_workers}")
+print(f"Pin memory: {pin_memory}")
 
 ####################################################################
 # DataLoader Setup
@@ -133,8 +135,11 @@ comment = opt_str + "," + net_str + "," + unit_str
 writer = SummaryWriter(comment=comment)
 
 start_time = datetime.now().strftime("%m-%d_%H-%M-%S")
-print(start_time, comment)
-
+print(f"\nTraining started at: {start_time}")
+print(f"Configuration: {comment}")
+print(f"\nModel architecture:")
+print(model)
+print("\nModel parameters:")
 print(model.state_dict())
 
 save_path = "./gsc-experiments/models/{}_".format(start_time) + comment + ".pt"
@@ -156,6 +161,10 @@ run_time = tools.PerformanceCounter()
 tools.PerformanceCounter.reset(run_time)
 
 for epoch in range(epochs_num + 1):
+    print(f"\n{'='*50}")
+    print(f"Epoch {epoch}/{epochs_num}")
+    print(f"{'='*50}")
+    
     # Evaluation mode for validation and testing
     model.eval()
 
@@ -163,6 +172,7 @@ for epoch in range(epochs_num + 1):
         # Validation
         val_loss = 0
         val_correct = 0
+        print("\nRunning validation...")
 
         for i, (inputs, targets) in enumerate(val_loader):
             inputs, targets = preprocessor.process_batch(inputs, targets)
@@ -206,9 +216,17 @@ for epoch in range(epochs_num + 1):
                 save_path
             )
 
+        print(
+            f"\nValidation Results:"
+            f"\n  Loss: {val_loss:.6f}"
+            f"\n  Accuracy: {val_acc:.4f}%"
+            f"\n  Best loss so far: {min_val_loss:.6f} (epoch {min_val_epoch})"
+        )
+
         # Testing
         test_loss = 0
         test_correct = 0
+        print("\nRunning testing...")
 
         for i, (inputs, targets) in enumerate(test_loader):
             inputs, targets = preprocessor.process_batch(inputs, targets)
@@ -237,6 +255,12 @@ for epoch in range(epochs_num + 1):
         writer.add_scalar("Loss/test", test_loss, epoch)
         writer.add_scalar("accuracy/test", test_acc, epoch)
 
+        print(
+            f"\nTest Results:"
+            f"\n  Loss: {test_loss:.6f}"
+            f"\n  Accuracy: {test_acc:.4f}%"
+        )
+
     print(
         "Epoch [{:4d}/{:4d}]  |  Summary | Loss/val: {:.6f}, Accuracy/val: {:8.4f}  | "
         " Loss/test: {:.6f}, Accuracy/test: {:8.4f}"
@@ -250,6 +274,7 @@ for epoch in range(epochs_num + 1):
     # Training
     # Run training from 0 to 399 epochs
     if epoch < epochs_num:
+        print("\nStarting training phase...")
         print_train_loss = 0
         print_train_correct = 0
 
@@ -309,8 +334,10 @@ for epoch in range(epochs_num + 1):
         ) * 100.0
 
         print(
-            "Epoch [{:4d}/{:4d}]  | Loss/train: {:.6f}, Accuracy/train: {:8.4f}"
-            .format(epoch + 1, epochs_num, print_train_loss, print_acc), flush=True
+            f"\nTraining Results:"
+            f"\n  Loss: {print_train_loss:.6f}"
+            f"\n  Accuracy: {print_acc:.4f}%"
+            f"\n  Learning rate: {scheduler.get_last_lr()[0]:.6f}"
         )
 
         # Update logging outputs
@@ -319,11 +346,13 @@ for epoch in range(epochs_num + 1):
         # Apply learning rate scheduling
         scheduler.step()
 
-    if end_training:
-        break
+        if end_training:
+            print("\nTraining stopped due to NaN loss!")
+            break
 
-print('Min val loss: {:.6f} at epoch {}'.format(min_val_loss, min_val_epoch))
-print(tools.PerformanceCounter.time(run_time) / 3600, "hr")
+print('\nTraining completed!')
+print(f'Best validation loss: {min_val_loss:.6f} at epoch {min_val_epoch}')
+print(f'Total training time: {tools.PerformanceCounter.time(run_time) / 3600:.2f} hours')
 
 
 
