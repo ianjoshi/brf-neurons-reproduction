@@ -6,6 +6,7 @@ import torch
 import torch.nn
 import math
 from datetime import datetime
+from tqdm import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR
@@ -173,8 +174,9 @@ for epoch in range(epochs_num + 1):
         val_loss = 0
         val_correct = 0
         print("\nRunning validation...")
-
-        for i, (inputs, targets) in enumerate(val_loader):
+        
+        val_pbar = tqdm(val_loader, desc="Validation", leave=False)
+        for i, (inputs, targets) in enumerate(val_pbar):
             inputs, targets = preprocessor.process_batch(inputs, targets)
             inputs = inputs.to(device)
             targets = targets.to(device)
@@ -193,6 +195,9 @@ for epoch in range(epochs_num + 1):
                 predictions=outputs,
                 targets=targets[sub_seq_length:, :, :]
             )
+            
+            # Update progress bar with current loss
+            val_pbar.set_postfix({'loss': f'{val_loss_value:.4f}'})
 
         val_loss /= total_val_steps
         val_acc = (val_correct / (val_batch_size * (sequence_length - sub_seq_length))) * 100.0
@@ -227,8 +232,9 @@ for epoch in range(epochs_num + 1):
         test_loss = 0
         test_correct = 0
         print("\nRunning testing...")
-
-        for i, (inputs, targets) in enumerate(test_loader):
+        
+        test_pbar = tqdm(test_loader, desc="Testing", leave=False)
+        for i, (inputs, targets) in enumerate(test_pbar):
             inputs, targets = preprocessor.process_batch(inputs, targets)
             inputs = inputs.to(device)
             targets = targets.to(device)
@@ -247,6 +253,9 @@ for epoch in range(epochs_num + 1):
                 predictions=outputs,
                 targets=targets[sub_seq_length:, :, :]
             )
+            
+            # Update progress bar with current loss
+            test_pbar.set_postfix({'loss': f'{test_loss_value:.4f}'})
 
         test_loss /= total_test_steps
         test_acc = (test_correct / (test_batch_size * (sequence_length - sub_seq_length))) * 100.0
@@ -280,8 +289,9 @@ for epoch in range(epochs_num + 1):
 
         # Go to training mode
         model.train()
-
-        for i, (inputs, targets) in enumerate(train_loader):
+        
+        train_pbar = tqdm(train_loader, desc="Training", leave=False)
+        for i, (inputs, targets) in enumerate(train_pbar):
             current_batch_size = len(inputs)
             inputs, targets = preprocessor.process_batch(inputs, targets)
             inputs, targets = inputs.to(device), targets.to(device)
@@ -318,15 +328,11 @@ for epoch in range(epochs_num + 1):
                 batch_correct / (current_batch_size * (sequence_length - sub_seq_length))
             ) * 100.0
 
-            # Log current loss and accuracy
-            writer.add_scalar("Loss/train", loss_value, iteration)
-            writer.add_scalar("accuracy/train", batch_accuracy, iteration)
-
-            if math.isnan(loss_value):
-                end_training = True
-                break
-
-            iteration += 1
+            # Update progress bar with current metrics
+            train_pbar.set_postfix({
+                'loss': f'{loss_value:.4f}',
+                'acc': f'{batch_accuracy:.2f}%'
+            })
 
         print_train_loss /= total_train_steps
         print_acc = (
@@ -346,8 +352,8 @@ for epoch in range(epochs_num + 1):
         # Apply learning rate scheduling
         scheduler.step()
 
-        if end_training:
-            print("\nTraining stopped due to NaN loss!")
+        if math.isnan(loss_value):
+            end_training = True
             break
 
 print('\nTraining completed!')
