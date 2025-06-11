@@ -38,7 +38,7 @@ print(device)
 
 rand_num = random.randint(1, 10000)
 
-PERMUTED = True
+PERMUTED = False
 label_last = False
 
 sequence_length = 28 * 28
@@ -230,7 +230,7 @@ print_every = 150
 ################################################################
 # Training loop
 ################################################################
-
+lambda_spike = 1e-7  #Spike Loss <---------------------------------------------------------------------------------------------
 iteration = 0
 min_val_loss = float("inf")
 loss_value = 1.
@@ -407,19 +407,39 @@ for epoch in range(epochs_num + 1):
             # Clear previous gradients
             optimizer.zero_grad()
 
-            outputs, _, _ = model(input)
+            # outputs, _, _ = model(input)
+            outputs, _, num_spikes = model(input)
 
-            # Apply loss sequentially against single pattern.
+            # # Apply loss sequentially against single pattern.
+            # loss = tools.apply_seq_loss(criterion=criterion, outputs=outputs, target=target)
+
+            # # for Label Last
+            # if label_last:
+            #     loss_value = loss.item()
+            # else:
+            #     loss_value = loss.item() / sequence_length
+
+            # # calculate gradient
+            # loss.backward()
+
+            # Main loss
             loss = tools.apply_seq_loss(criterion=criterion, outputs=outputs, target=target)
+            if not label_last:
+                loss = loss / sequence_length
 
-            # for Label Last
-            if label_last:
-                loss_value = loss.item()
-            else:
-                loss_value = loss.item() / sequence_length
+            # Spike loss
+            spike_loss = lambda_spike * (num_spikes / current_batch_size)
 
-            # calculate gradient
-            loss.backward()
+            # Total loss
+            total_loss = loss + spike_loss
+
+            loss_value = total_loss.item()
+
+            # Logging
+            writer.add_scalar("Loss/spike_penalty", spike_loss.item(), iteration)
+
+            # Calculate gradient
+            total_loss.backward()
 
             # Gradient Clipping
             torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_value)
