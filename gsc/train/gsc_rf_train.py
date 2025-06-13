@@ -7,7 +7,8 @@ import torch.nn
 import math
 from datetime import datetime
 from tqdm import tqdm
-
+import random
+from torch.utils.data import Subset
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -16,22 +17,21 @@ from gsc.data.Preprocessor import Preprocessor
 from gsc.train import tools
 
 import snn
-import random
 
 ###################################################################
 # General Settings
 ###################################################################
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 if not torch.cuda.is_available():
     print("Warning: CUDA not available. Running on CPU may be slow.")
 
-if device == "cuda":
+if device.type == "cuda":
     pin_memory = True
-    num_workers = 1
+    num_workers = 1  # Increased for faster data loading
 else:
     pin_memory = False
-    num_workers = 0
+    num_workers = 0  # Non-zero for CPU to parallelize data loading
 
 print(f"Using device: {device}")
 print(f"Number of workers: {num_workers}")
@@ -47,11 +47,14 @@ hidden_size = 36
 num_classes = 35
 
 train_batch_size = 16
-val_batch_size = 9981  # Full validation split
-test_batch_size = 11005  # Full test split
-train_dataset_size = 84843
-val_dataset_size = 9981
-test_dataset_size = 11005
+val_batch_size = 64  # Reduced for faster validation
+test_batch_size = 64  # Reduced for faster testing
+
+# Percentage of data to use (e.g., 10 for 10%)
+data_percentage = 10  # User-defined: change to desired x%
+
+# Set random seed for reproducibility
+random.seed(42)
 
 loader_factory = SpeechCommandsDataLoader(
     root="./gsc-experiments/data",
@@ -59,12 +62,74 @@ loader_factory = SpeechCommandsDataLoader(
     batch_size=train_batch_size,
     num_workers=num_workers,
     pin_memory=pin_memory,
+    cache_data=True,
+    preload_cache=True
 )
 
+# Get the full datasets
 train_loader, val_loader, test_loader = loader_factory.get_loaders()
 
+# Access the underlying datasets
+train_dataset = train_loader.dataset
+val_dataset = val_loader.dataset
+test_dataset = test_loader.dataset
+
+# Compute new dataset sizes based on x%
+train_dataset_size = int(len(train_dataset) * (data_percentage / 100))
+val_dataset_size = int(len(val_dataset) * (data_percentage / 100))
+test_dataset_size = int(len(test_dataset) * (data_percentage / 100))
+
+# Randomly sample indices for each split
+train_indices = random.sample(range(len(train_dataset)), train_dataset_size)
+val_indices = random.sample(range(len(val_dataset)), val_dataset_size)
+test_indices = random.sample(range(len(test_dataset)), test_dataset_size)
+
+# Create subsets
+train_subset = Subset(train_dataset, train_indices)
+val_subset = Subset(val_dataset, val_indices)
+test_subset = Subset(test_dataset, test_indices)
+
+# Create new DataLoaders with subsets
+train_loader = torch.utils.data.DataLoader(
+    train_subset,
+    batch_size=train_batch_size,
+    shuffle=True,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    drop_last=False
+)
+val_loader = torch.utils.data.DataLoader(
+    val_subset,
+    batch_size=val_batch_size,
+    shuffle=False,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    drop_last=False
+)
+test_loader = torch.utils.data.DataLoader(
+    test_subset,
+    batch_size=test_batch_size,
+    shuffle=False,
+    num_workers=num_workers,
+    pin_memory=pin_memory,
+    drop_last=False
+)
+
+# Update step counts
+total_train_steps = len(train_loader)
+total_val_steps = len(val_loader)
+total_test_steps = len(test_loader)
+
+print(f"Using {data_percentage}% of data:")
+print(f"Train dataset size: {train_dataset_size} samples")
+print(f"Validation dataset size: {val_dataset_size} samples")
+print(f"Test dataset size: {test_dataset_size} samples")
+print(f"Train steps per epoch: {total_train_steps}")
+print(f"Validation steps per epoch: {total_val_steps}")
+print(f"Test steps per epoch: {total_test_steps}")
+
 # Preprocessor for batch formatting
-preprocessor = Preprocessor(normalize_inputs=False)
+preprocessor = Preprocessor(normalize_inputs=True)  # Enabled for stability
 
 ####################################################################
 # Model Setup
@@ -106,10 +171,6 @@ criterion = torch.nn.NLLLoss()
 optimizer_lr = 0.1
 gradient_clip_value = 1.0
 optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
-
-total_train_steps = len(train_loader)
-total_val_steps = len(val_loader)
-total_test_steps = len(test_loader)
 
 epochs_num = 400
 

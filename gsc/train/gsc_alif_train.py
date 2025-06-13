@@ -57,6 +57,8 @@ loader_factory = SpeechCommandsDataLoader(
     batch_size=train_batch_size,
     num_workers=num_workers,
     pin_memory=pin_memory,
+    cache_data=True,
+    preload_cache=True
 )
 
 train_loader, val_loader, test_loader = loader_factory.get_loaders()
