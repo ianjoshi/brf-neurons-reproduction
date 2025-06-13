@@ -7,11 +7,13 @@ import torchaudio
 from torch.utils.data import Dataset
 from torchaudio.datasets import SPEECHCOMMANDS
 from tqdm import tqdm
+import random
 
 class SpeechCommands(Dataset):
     """
-    A PyTorch dataset loader for the Google Speech Commands v0.02 dataset with in-memory caching.
-    
+    A PyTorch dataset loader for the Google Speech Commands v0.02 dataset with in-memory caching
+    and percentage-based data sampling.
+
     Parameters:
     - root (str | pathlib.Path): Directory used to download or locate the dataset.
     - subset (str): Which data split to load ("training", "validation", or "testing").
@@ -20,7 +22,9 @@ class SpeechCommands(Dataset):
     - sequence_length (int): Desired fixed length of each sample sequence. Defaults to 1300.
     - download (bool): If True, downloads the dataset if not present. Defaults to True.
     - cache_data (bool): If True, caches transformed data in memory. Defaults to True.
-    - preload_cache (bool): If True, preloads all data into cache during initialization. Defaults to False.
+    - preload_cache (bool): If True, preloads all selected data into cache. Defaults to False.
+    - data_percentage (float): Percentage of data to use (0.0 to 100.0). Defaults to 100.0.
+    - seed (int, optional): Random seed for reproducible data sampling. Defaults to None.
     """
     _VALIDATION_FILE = "validation_list.txt"
     _TEST_FILE = "testing_list.txt"
@@ -35,10 +39,15 @@ class SpeechCommands(Dataset):
         download: bool = True,
         cache_data: bool = True,
         preload_cache: bool = False,
+        data_percentage: float = 100.0,
+        seed: Optional[int] = None,
     ) -> None:
-        print(f"\nInitializing SpeechCommands with subset={subset}, cache_data={cache_data}, preload_cache={preload_cache}")
+        print(f"\nInitializing SpeechCommands with subset={subset}, cache_data={cache_data}, "
+              f"preload_cache={preload_cache}, data_percentage={data_percentage}%")
         self.cache_data = cache_data
-        self.cache = {} if cache_data else None  # In-memory cache for (waveform, label) tuples
+        self.cache = {} if cache_data else None
+        self.data_percentage = max(0.0, min(data_percentage, 100.0))
+        self.seed = seed
 
         # Print available audio backends
         print(f"Available torchaudio backends: {torchaudio.list_audio_backends()}")
@@ -96,6 +105,14 @@ class SpeechCommands(Dataset):
             self._walker = test_list
             print(f"Created testing split with {len(self._walker)} files")
 
+        # Sample a percentage of the data
+        if self.data_percentage < 100.0:
+            if self.seed is not None:
+                random.seed(self.seed)
+            num_samples = max(1, int(len(self._walker) * (self.data_percentage / 100.0)))
+            self._walker = random.sample(self._walker, num_samples)
+            print(f"Sampled {self.data_percentage}% of {subset} split: {len(self._walker)} files")
+
         # Store transforms and sequence length
         self.transform = transform
         self.target_transform = target_transform
@@ -139,9 +156,6 @@ class SpeechCommands(Dataset):
         return x
 
     def _load_and_cache_sample(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Load a sample from disk, apply transforms, and cache it.
-        """
         try:
             rel_path = self._walker[index]
             full_path = str(pathlib.Path(self._dataset._path) / rel_path)
@@ -151,7 +165,6 @@ class SpeechCommands(Dataset):
             waveform, _ = torchaudio.load(full_path, backend="soundfile")
             label = pathlib.Path(rel_path).parent.name
 
-            # Apply transforms
             if self.transform:
                 waveform = self.transform(waveform)  # shape: [1, n_mfcc, time]
                 waveform = waveform.squeeze(0).transpose(0, 1)  # [time, n_mfcc]
@@ -159,7 +172,6 @@ class SpeechCommands(Dataset):
             if self.target_transform:
                 label = self.target_transform(label)
 
-            # Cache the sample if caching is enabled
             if self.cache_data:
                 self.cache[index] = (waveform, label)
 
@@ -172,9 +184,6 @@ class SpeechCommands(Dataset):
         return len(self._walker)
 
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Get a sample, using the cache if available.
-        """
         if self.cache_data and index in self.cache:
             return self.cache[index]
         return self._load_and_cache_sample(index)

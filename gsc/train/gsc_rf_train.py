@@ -47,14 +47,15 @@ hidden_size = 36
 num_classes = 35
 
 train_batch_size = 16
-val_batch_size = 64  # Reduced for faster validation
-test_batch_size = 64  # Reduced for faster testing
+val_batch_size = 64
+test_batch_size = 64
 
 # Percentage of data to use (e.g., 10 for 10%)
-data_percentage = 10  # User-defined: change to desired x%
+data_percentage = 5
+seed = 42
 
 # Set random seed for reproducibility
-random.seed(42)
+random.seed(seed)
 
 loader_factory = SpeechCommandsDataLoader(
     root="./gsc-experiments/data",
@@ -63,57 +64,18 @@ loader_factory = SpeechCommandsDataLoader(
     num_workers=num_workers,
     pin_memory=pin_memory,
     cache_data=True,
-    preload_cache=True
+    preload_cache=True,
+    data_percentage=data_percentage,
+    seed=seed
 )
 
-# Get the full datasets
+# Get the DataLoaders
 train_loader, val_loader, test_loader = loader_factory.get_loaders()
 
-# Access the underlying datasets
-train_dataset = train_loader.dataset
-val_dataset = val_loader.dataset
-test_dataset = test_loader.dataset
-
-# Compute new dataset sizes based on x%
-train_dataset_size = int(len(train_dataset) * (data_percentage / 100))
-val_dataset_size = int(len(val_dataset) * (data_percentage / 100))
-test_dataset_size = int(len(test_dataset) * (data_percentage / 100))
-
-# Randomly sample indices for each split
-train_indices = random.sample(range(len(train_dataset)), train_dataset_size)
-val_indices = random.sample(range(len(val_dataset)), val_dataset_size)
-test_indices = random.sample(range(len(test_dataset)), test_dataset_size)
-
-# Create subsets
-train_subset = Subset(train_dataset, train_indices)
-val_subset = Subset(val_dataset, val_indices)
-test_subset = Subset(test_dataset, test_indices)
-
-# Create new DataLoaders with subsets
-train_loader = torch.utils.data.DataLoader(
-    train_subset,
-    batch_size=train_batch_size,
-    shuffle=True,
-    num_workers=num_workers,
-    pin_memory=pin_memory,
-    drop_last=False
-)
-val_loader = torch.utils.data.DataLoader(
-    val_subset,
-    batch_size=val_batch_size,
-    shuffle=False,
-    num_workers=num_workers,
-    pin_memory=pin_memory,
-    drop_last=False
-)
-test_loader = torch.utils.data.DataLoader(
-    test_subset,
-    batch_size=test_batch_size,
-    shuffle=False,
-    num_workers=num_workers,
-    pin_memory=pin_memory,
-    drop_last=False
-)
+# Get dataset sizes
+train_dataset_size = len(train_loader.dataset)
+val_dataset_size = len(val_loader.dataset)
+test_dataset_size = len(test_loader.dataset)
 
 # Update step counts
 total_train_steps = len(train_loader)
@@ -129,7 +91,7 @@ print(f"Validation steps per epoch: {total_val_steps}")
 print(f"Test steps per epoch: {total_test_steps}")
 
 # Preprocessor for batch formatting
-preprocessor = Preprocessor(normalize_inputs=True)  # Enabled for stability
+preprocessor = Preprocessor(normalize_inputs=True)
 
 ####################################################################
 # Model Setup

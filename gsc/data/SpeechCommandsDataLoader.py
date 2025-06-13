@@ -3,7 +3,7 @@ import sys
 import pathlib
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from typing import Tuple
+from typing import Tuple, Optional
 from torch.utils.data import DataLoader
 from torchaudio.transforms import MFCC
 from gsc.data.SpeechCommands import SpeechCommands
@@ -12,7 +12,7 @@ from gsc.data.OneHotTargetTransform import OneHotTargetTransform
 class SpeechCommandsDataLoader:
     """
     A class that sets up and returns PyTorch DataLoaders for the SpeechCommands dataset.
-    
+
     Parameters:
     - root (str): Root directory for the dataset.
     - sequence_length (int): Number of time steps to pad/truncate each sample to.
@@ -21,6 +21,8 @@ class SpeechCommandsDataLoader:
     - pin_memory (bool): Whether to pin memory (for CUDA optimization).
     - cache_data (bool): Whether to cache data in memory. Defaults to True.
     - preload_cache (bool): Whether to preload all data into cache. Defaults to False.
+    - data_percentage (float): Percentage of data to use (0.0 to 100.0). Defaults to 100.0.
+    - seed (int, optional): Random seed for reproducible data sampling. Defaults to None.
     """
     def __init__(
         self,
@@ -31,6 +33,8 @@ class SpeechCommandsDataLoader:
         pin_memory: bool = False,
         cache_data: bool = True,
         preload_cache: bool = False,
+        data_percentage: float = 100.0,
+        seed: Optional[int] = None,
     ):
         self.root = root
         self.sequence_length = sequence_length
@@ -39,9 +43,17 @@ class SpeechCommandsDataLoader:
         self.pin_memory = pin_memory
         self.cache_data = cache_data
         self.preload_cache = preload_cache
+        self.data_percentage = data_percentage
+        self.seed = seed
 
         print("Building label-to-index map...")
-        base_ds = SpeechCommands(root=root, subset="training", download=True, cache_data=False)
+        base_ds = SpeechCommands(
+            root=root,
+            subset="training",
+            download=True,
+            cache_data=False,
+            data_percentage=100.0
+        )
         self.labels = sorted(set(pathlib.Path(path).parent.name for path in base_ds._walker))
         self.label_to_index = {label: idx for idx, label in enumerate(self.labels)}
         self.num_classes = len(self.labels)
@@ -68,7 +80,9 @@ class SpeechCommandsDataLoader:
             sequence_length=self.sequence_length,
             download=False,
             cache_data=self.cache_data,
-            preload_cache=self.preload_cache
+            preload_cache=self.preload_cache,
+            data_percentage=self.data_percentage,
+            seed=self.seed
         )
         return DataLoader(
             dataset,

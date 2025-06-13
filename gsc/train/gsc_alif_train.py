@@ -45,11 +45,10 @@ hidden_size = 36
 num_classes = 35
 
 train_batch_size = 4
-val_batch_size = 9981
-test_batch_size = 11005
-train_dataset_size = 84843
-val_dataset_size = 9981
-test_dataset_size = 11005
+val_batch_size = 64  # Fixed from 9981
+test_batch_size = 64  # Fixed from 11005
+data_percentage = 10  # User-defined: change to desired x%
+seed = 42  # For reproducible sampling
 
 loader_factory = SpeechCommandsDataLoader(
     root="./gsc-experiments/data",
@@ -58,10 +57,30 @@ loader_factory = SpeechCommandsDataLoader(
     num_workers=num_workers,
     pin_memory=pin_memory,
     cache_data=True,
-    preload_cache=True
+    preload_cache=True,
+    data_percentage=data_percentage,
+    seed=seed
 )
 
 train_loader, val_loader, test_loader = loader_factory.get_loaders()
+
+# Get dataset sizes
+train_dataset_size = len(train_loader.dataset)
+val_dataset_size = len(val_loader.dataset)
+test_dataset_size = len(test_loader.dataset)
+
+# Update step counts
+total_train_steps = len(train_loader)
+total_val_steps = len(val_loader)
+total_test_steps = len(test_loader)
+
+print(f"Using {data_percentage}% of data:")
+print(f"Train dataset size: {train_dataset_size} samples")
+print(f"Validation dataset size: {val_dataset_size} samples")
+print(f"Test dataset size: {test_dataset_size} samples")
+print(f"Train steps per epoch: {total_train_steps}")
+print(f"Validation steps per epoch: {total_val_steps}")
+print(f"Test steps per epoch: {total_test_steps}")
 
 # Preprocessor for batch formatting
 preprocessor = Preprocessor(normalize_inputs=False)
