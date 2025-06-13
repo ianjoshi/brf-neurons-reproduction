@@ -12,7 +12,7 @@ import random
 class SpeechCommands(Dataset):
     """
     A PyTorch dataset loader for the Google Speech Commands v0.02 dataset with in-memory caching
-    and percentage-based data sampling.
+    and percentage-based data sampling. Normalizes data during caching.
 
     Parameters:
     - root (str | pathlib.Path): Directory used to download or locate the dataset.
@@ -168,9 +168,13 @@ class SpeechCommands(Dataset):
             if self.transform:
                 waveform = self.transform(waveform)  # shape: [1, n_mfcc, time]
                 waveform = waveform.squeeze(0).transpose(0, 1)  # [time, n_mfcc]
-                waveform = self._fix_length(waveform)
+                waveform = self._fix_length(waveform)  # [sequence_length, n_mfcc]
+                # Normalize waveform
+                mean = waveform.mean(dim=(0, 1), keepdim=True)
+                std = waveform.std(dim=(0, 1), keepdim=True) + 1e-8
+                waveform = (waveform - mean) / std  # [sequence_length, n_mfcc]
             if self.target_transform:
-                label = self.target_transform(label)
+                label = self.target_transform(label)  # [sequence_length, num_classes]
 
             if self.cache_data:
                 self.cache[index] = (waveform, label)

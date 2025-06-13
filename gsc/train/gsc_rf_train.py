@@ -41,12 +41,12 @@ print(f"Pin memory: {pin_memory}")
 # DataLoader Setup
 ####################################################################
 
-sequence_length = 1300
+sequence_length = 800
 input_size = 13
 hidden_size = 36
 num_classes = 35
 
-train_batch_size = 16
+train_batch_size = 32
 val_batch_size = 64
 test_batch_size = 64
 
@@ -91,7 +91,7 @@ print(f"Validation steps per epoch: {total_val_steps}")
 print(f"Test steps per epoch: {total_test_steps}")
 
 # Preprocessor for batch formatting
-preprocessor = Preprocessor(normalize_inputs=True)
+preprocessor = Preprocessor(normalize_inputs=False, permute_inputs=True)
 
 ####################################################################
 # Model Setup
