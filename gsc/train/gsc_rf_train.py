@@ -50,7 +50,7 @@ train_batch_size = 16
 val_batch_size = 64
 test_batch_size = 64
 
-# Percentage of data to use (e.g., 10 for 10%)
+# Percentage of data to use (e.g., 25 for 25%)
 data_percentage = 25
 seed = 42
 

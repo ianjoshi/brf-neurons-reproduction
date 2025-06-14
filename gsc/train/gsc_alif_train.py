@@ -39,15 +39,16 @@ print(f"Pin memory: {pin_memory}")
 # DataLoader Setup
 ####################################################################
 
-sequence_length = 1300
+sequence_length = 100
 input_size = 13
-hidden_size = 36
+hidden_size = 128
 num_classes = 35
 
-train_batch_size = 4
-val_batch_size = 64  # Fixed from 9981
-test_batch_size = 64  # Fixed from 11005
-data_percentage = 10  # User-defined: change to desired x%
+train_batch_size = 16
+val_batch_size = 64
+test_batch_size = 64
+
+data_percentage = 25
 seed = 42  # For reproducible sampling
 
 loader_factory = SpeechCommandsDataLoader(
@@ -134,15 +135,10 @@ rand_num = random.randint(1, 10000)
 
 criterion = torch.nn.NLLLoss()
 
-optimizer_lr = 0.05
+optimizer_lr = 0.01
 optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
 
-# Number of iterations per epoch
-total_train_steps = len(train_loader)
-total_val_steps = len(val_loader)
-total_test_steps = len(test_loader)
-
-epochs_num = 400
+epochs_num = 100
 
 # Learning rate scheduling
 scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch_count: 1. - epoch_count / epochs_num)
@@ -176,7 +172,7 @@ save_init_path = "./gsc-experiments/models/{}_init_".format(start_time) + commen
 torch.save({'model_state_dict': model.state_dict()}, save_init_path)
 
 min_val_loss = float('inf')
-loss_value = 1.0 # Dummy init for val.
+loss_value = 1.0
 iteration = 0
 end_training = False
 
@@ -212,21 +208,20 @@ for epoch in range(epochs_num + 1):
             loss = tools.apply_seq_loss(
                 criterion=criterion,
                 outputs=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
-            val_loss_value = loss.item() / (sequence_length - sub_seq_length)
+            val_loss_value = loss.item()
             val_loss += val_loss_value
 
             val_correct += tools.count_correct_prediction(
                 predictions=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
             
-            # Update progress bar with current loss
             val_pbar.set_postfix({'loss': f'{val_loss_value:.4f}'})
 
         val_loss /= total_val_steps
-        val_acc = (val_correct / (val_dataset_size * (sequence_length - sub_seq_length))) * 100.0
+        val_acc = (val_correct / val_dataset_size) * 100.0
 
         # Log current val loss and accuracy
         writer.add_scalar("Loss/val", val_loss, epoch)
@@ -270,23 +265,21 @@ for epoch in range(epochs_num + 1):
             loss = tools.apply_seq_loss(
                 criterion=criterion,
                 outputs=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
-            test_loss_value = loss.item() / (sequence_length - sub_seq_length)
+            test_loss_value = loss.item()
             test_loss += test_loss_value
 
             test_correct += tools.count_correct_prediction(
                 predictions=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
-            
-            # Update progress bar with current loss
+
             test_pbar.set_postfix({'loss': f'{test_loss_value:.4f}'})
 
         test_loss /= total_test_steps
-        test_acc = (test_correct / (test_dataset_size * (sequence_length - sub_seq_length))) * 100.0
+        test_acc = (test_correct / test_dataset_size) * 100.0 
 
-        # Log current test loss and accuracy
         writer.add_scalar("Loss/test", test_loss, epoch)
         writer.add_scalar("accuracy/test", test_acc, epoch)
 
@@ -298,7 +291,7 @@ for epoch in range(epochs_num + 1):
 
     print(
         "Epoch [{:4d}/{:4d}]  |  Summary | Loss/val: {:.6f}, Accuracy/val: {:8.4f}  | "
-        " Loss/test: {:.6f}, Accuracy/test: {:8.4f}"
+        "Loss/test: {:.6f}, Accuracy/test: {:8.4f}"
         .format(epoch, epochs_num, val_loss, val_acc, test_loss, test_acc),
         flush=True
     )
@@ -307,7 +300,6 @@ for epoch in range(epochs_num + 1):
     writer.flush()
 
     # Training
-    # Run training from 0 to 399 epochs
     if epoch < epochs_num:
         print("\nStarting training phase...")
         print_train_loss = 0
@@ -326,13 +318,13 @@ for epoch in range(epochs_num + 1):
             optimizer.zero_grad()
             outputs = model(inputs)[0]
 
-            # Accumulate loss for each time step and batch
+            # Compute loss for the sequence
             loss = tools.apply_seq_loss(
                 criterion=criterion,
                 outputs=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
-            loss_value = loss.item() / (sequence_length - sub_seq_length)
+            loss_value = loss.item() 
 
             # Calculate the gradients
             loss.backward()
@@ -346,13 +338,11 @@ for epoch in range(epochs_num + 1):
             # Calculate batch accuracy
             batch_correct = tools.count_correct_prediction(
                 predictions=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets  # Pass full targets
             )
             print_train_correct += batch_correct
 
-            batch_accuracy = (
-                batch_correct / (current_batch_size * (sequence_length - sub_seq_length))
-            ) * 100.0
+            batch_accuracy = (batch_correct / current_batch_size) * 100.0 
 
             # Update progress bar with current metrics
             train_pbar.set_postfix({
@@ -360,10 +350,14 @@ for epoch in range(epochs_num + 1):
                 'acc': f'{batch_accuracy:.2f}%'
             })
 
+            # Log current loss and accuracy
+            writer.add_scalar("Loss/train", loss_value, iteration)
+            writer.add_scalar("accuracy/train", batch_accuracy, iteration)
+
+            iteration += 1
+
         print_train_loss /= total_train_steps
-        print_acc = (
-            print_train_correct / (train_dataset_size * (sequence_length - sub_seq_length))
-        ) * 100.0
+        print_acc = (print_train_correct / train_dataset_size) * 100.0
 
         print(
             f"\nTraining Results:"
