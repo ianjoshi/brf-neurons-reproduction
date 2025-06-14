@@ -1,7 +1,7 @@
 import torch
 import typing
 import time
-
+import torch.nn.functional as F
 
 def apply_seq_loss(
     criterion: torch.nn.Module,
@@ -10,35 +10,25 @@ def apply_seq_loss(
     scale_func: typing.Callable[[int], float] = None
 ) -> torch.Tensor:
     """
-    Apply loss function over a sequence of outputs and targets.
+    Apply loss function for sequence-level classification using the last time step.
 
     Parameters:
     - criterion (torch.nn.Module): Loss function (e.g., NLLLoss).
     - outputs (torch.Tensor): Model outputs of shape [sequence_length, batch_size, num_classes].
     - targets (torch.Tensor): One-hot target labels of shape [sequence_length, batch_size, num_classes].
-    - scale_func (Callable[[int], float], optional): Scaling function for each time step.
+    - scale_func (Callable[[int], float], optional): Not used for sequence-level classification.
 
     Returns:
-    - torch.Tensor: Accumulated loss over the sequence.
+    - torch.Tensor: Loss for the sequence.
     """
-    # Shape: [sequence_length, batch_size, num_classes]
-    sequence_length = outputs.shape[0]
+    # Use last time step: outputs[-1] is [batch_size, num_classes]
+    out = F.log_softmax(outputs[-1], dim=1)  # Apply log_softmax along class dimension
 
-    # Get class indices from one-hot targets: [sequence_length, batch_size]
-    targets_argmax = targets.argmax(dim=2)
+    # Get class indices from one-hot targets for last time step: [batch_size]
+    target_indices = targets[-1].argmax(dim=1)
 
-    # Apply log softmax for NLLLoss
-    log_softmax = torch.nn.LogSoftmax(dim=2)
-    out = log_softmax(outputs)
-
-    loss = 0
-
-    if scale_func is None:
-        for t in range(sequence_length):
-            loss += criterion(out[t], targets_argmax[t])
-    else:
-        for t in range(sequence_length):
-            loss += scale_func(t) * criterion(out[t], targets.argmax[t])
+    # Compute loss
+    loss = criterion(out, target_indices)
 
     return loss
 
@@ -48,24 +38,25 @@ def count_correct_prediction(
     targets: torch.Tensor
 ) -> int:
     """
-    Count the number of correct predictions in a sequence.
+    Count the number of correct predictions for sequence-level classification.
 
     Parameters:
     - predictions (torch.Tensor): Model outputs of shape [sequence_length, batch_size, num_classes].
     - targets (torch.Tensor): One-hot target labels of shape [sequence_length, batch_size, num_classes].
 
     Returns:
-    - int: Number of correct predictions across the sequence and batch.
+    - int: Number of correct predictions for the batch.
     """
-    # Compare argmax of predictions and targets: [sequence_length, batch_size]
-    return predictions.argmax(dim=2).eq(targets.argmax(dim=2)).sum().item()
+    # Use last time step: [batch_size]
+    pred = predictions[-1].argmax(dim=1)
+    targ = targets[-1].argmax(dim=1)
+    return pred.eq(targ).sum().item()
 
 
 class PerformanceCounter:
     """
     A simple performance counter for measuring elapsed time.
     """
-
     def __init__(self) -> None:
         self.start_time = 0
 

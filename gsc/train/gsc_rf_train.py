@@ -43,7 +43,7 @@ print(f"Pin memory: {pin_memory}")
 
 sequence_length = 100 
 input_size = 13
-hidden_size = 36
+hidden_size = 128
 num_classes = 35
 
 train_batch_size = 16
@@ -51,7 +51,7 @@ val_batch_size = 64
 test_batch_size = 64
 
 # Percentage of data to use (e.g., 10 for 10%)
-data_percentage = 40
+data_percentage = 25
 seed = 42
 
 # Set random seed for reproducibility
@@ -91,7 +91,7 @@ print(f"Validation steps per epoch: {total_val_steps}")
 print(f"Test steps per epoch: {total_test_steps}")
 
 # Preprocessor for batch formatting
-preprocessor = Preprocessor(normalize_inputs=False, permute_inputs=True)
+preprocessor = Preprocessor(normalize_inputs=True, permute_inputs=True)
 
 ####################################################################
 # Model Setup
@@ -130,7 +130,7 @@ model = torch.jit.script(model)
 
 rand_num = random.randint(1, 10000)
 criterion = torch.nn.NLLLoss()
-optimizer_lr = 0.1
+optimizer_lr = 0.01
 gradient_clip_value = 1.0
 optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
 
@@ -197,20 +197,20 @@ for epoch in range(epochs_num + 1):
             loss = tools.apply_seq_loss(
                 criterion=criterion,
                 outputs=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
-            val_loss_value = loss.item() / (sequence_length - sub_seq_length)
+            val_loss_value = loss.item()
             val_loss += val_loss_value
 
             val_correct += tools.count_correct_prediction(
                 predictions=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
             
             val_pbar.set_postfix({'loss': f'{val_loss_value:.4f}'})
 
         val_loss /= total_val_steps
-        val_acc = (val_correct / (val_dataset_size * (sequence_length - sub_seq_length))) * 100.0
+        val_acc = (val_correct / val_dataset_size) * 100.0
         val_sop = val_total_spikes / val_dataset_size
 
         writer.add_scalar("Loss/val", val_loss, epoch)
@@ -256,20 +256,20 @@ for epoch in range(epochs_num + 1):
             loss = tools.apply_seq_loss(
                 criterion=criterion,
                 outputs=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
-            test_loss_value = loss.item() / (sequence_length - sub_seq_length)
+            test_loss_value = loss.item()
             test_loss += test_loss_value
 
             test_correct += tools.count_correct_prediction(
                 predictions=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
             
             test_pbar.set_postfix({'loss': f'{test_loss_value:.4f}'})
 
         test_loss /= total_test_steps
-        test_acc = (test_correct / (test_dataset_size * (sequence_length - sub_seq_length))) * 100.0
+        test_acc = (test_correct / test_dataset_size) * 100.0  # Sequence-level accuracy
         test_sop = test_total_spikes / test_dataset_size
 
         writer.add_scalar("Loss/test", test_loss, epoch)
@@ -311,9 +311,9 @@ for epoch in range(epochs_num + 1):
             loss = tools.apply_seq_loss(
                 criterion=criterion,
                 outputs=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
-            loss_value = loss.item() / (sequence_length - sub_seq_length)
+            loss_value = loss.item()
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_value)
@@ -323,13 +323,11 @@ for epoch in range(epochs_num + 1):
 
             batch_correct = tools.count_correct_prediction(
                 predictions=outputs,
-                targets=targets[sub_seq_length:, :, :]
+                targets=targets
             )
             print_train_correct += batch_correct
 
-            batch_accuracy = (
-                batch_correct / (current_batch_size * (sequence_length - sub_seq_length))
-            ) * 100.0
+            batch_accuracy = (batch_correct / current_batch_size) * 100.0
 
             writer.add_scalar("Loss/train", loss_value, iteration)
             writer.add_scalar("accuracy/train", batch_accuracy, iteration)
@@ -346,9 +344,7 @@ for epoch in range(epochs_num + 1):
             iteration += 1
 
         print_train_loss /= total_train_steps
-        print_acc = (
-            print_train_correct / (train_dataset_size * (sequence_length - sub_seq_length))
-        ) * 100.0
+        print_acc = (print_train_correct / train_dataset_size) * 100.0
 
         print(
             f"\nTraining Results:"
