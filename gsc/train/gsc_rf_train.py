@@ -41,17 +41,17 @@ print(f"Pin memory: {pin_memory}")
 # DataLoader Setup
 ####################################################################
 
-sequence_length = 800
+sequence_length = 100 
 input_size = 13
 hidden_size = 36
 num_classes = 35
 
-train_batch_size = 32
+train_batch_size = 16
 val_batch_size = 64
 test_batch_size = 64
 
 # Percentage of data to use (e.g., 10 for 10%)
-data_percentage = 5
+data_percentage = 40
 seed = 42
 
 # Set random seed for reproducibility
@@ -134,7 +134,7 @@ optimizer_lr = 0.1
 gradient_clip_value = 1.0
 optimizer = torch.optim.Adam(model.parameters(), lr=optimizer_lr)
 
-epochs_num = 400
+epochs_num = 100
 
 scheduler = LambdaLR(optimizer, lr_lambda=lambda epoch_count: 1. - epoch_count / epochs_num)
 
