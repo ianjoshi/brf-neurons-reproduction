@@ -30,6 +30,14 @@ source brf-venv\Scripts\activate  # On Windows
 pip install -r requirements.txt
 ```
 
+## Reproduction of Figure 5
+This repository reproduces the experiments corresponding to Figure 5 of the original BRF paper. These experiments benchmark BRF neurons against standard RF and ALIF models across multiple sequential classification tasks using SNNs. All reproduction scripts and results are located in the `experiments/` directory. The code structure and experimental setup are aligned with the original BRF repository: https://github.com/AdaptiveAILab/brf-neurons, with minor adaptations for local reproducibility. The following datasets were used:
+- SMNIST (Sequential MNIST)
+- PMNIST (Permuted Sequential MNIST)
+- ECG (Electrocardiogram classification)
+- SHD (Spiking Heidelberg Digits)
+
+
 ## Citation
 
 If you use this code, please cite the original paper:
@@ -41,4 +49,9 @@ If you use this code, please cite the original paper:
   booktitle={International Conference on Machine Learning (ICML)},
   year={2024}
 }
+```
+
+Also consider referencing the official implementation repository:
+```
+https://github.com/AdaptiveAILab/brf-neurons
 ```
