@@ -13,7 +13,7 @@ The Balanced Resonate-and-Fire (BRF) neuron introduces stable and sparse oscilla
 
 This project requires **Python 3.10.4**, which was used in the original experiments.
 
-## Installation
+## Setup Instructions
 
 Create a new virtual environment and install the required dependencies:
 
@@ -24,7 +24,7 @@ cd brf-neurons-reproduction
 
 # Create virtual environment
 python3.10 -m venv brf-venv
-source brf-venv\Scripts\activate  # On Windows
+brf-venv\Scripts\activate  # On Windows
 
 # Install required packages
 pip install -r requirements.txt
@@ -37,6 +37,41 @@ This repository reproduces the experiments corresponding to Figure 5 of the orig
 - ECG (Electrocardiogram classification)
 - SHD (Spiking Heidelberg Digits)
 
+
+## Experiments with Google Speech Commands
+We extend the BRF neuron experiments to the Google Speech Commands (GSC) dataset to evaluate their performance on a real-world audio keyword classification. We use the Google Speech Commands v0.03 dataset, as distributed via TensorFlow Datasets: https://www.tensorflow.org/datasets/catalog/speech_commands.
+
+All code specific to this extension is located in the `gsc/` directory. This includes:
+- `gsc/data/`:
+  - `SpeechCommands.py`: Custom PyTorch Dataset class that wraps the official `torchaudio.datasets.SPEECHCOMMANDS`.
+  - `SpeechCommandsDataLoader.py`: Encapsulates logic to build `DataLoaders` for all three splits (train, val, test). It:
+    - Initializes MFCC transforms and one-hot label encodings.
+    - Instantiates `SpeechCommands` objects with caching, sequence length, and sampling percentage options.
+    - Returns PyTorch `DataLoaders` for each split.
+  - `OneHotTargetTransform.py`: Utility class that converts a string label into a one-hot tensor and repeats that one-hot vector over a fixed number of time steps, to match the input sequence length.
+  - `Preprocessor.py`: Formats input-output pairs into the correct shape for training.
+- `gsc/train/`:
+  - `gsc_brf_train.py`: Trains the BRF model on GSC.
+  - `gsc_rf_train.py`: Trains the RF model on GSC.
+  - `gsc_alif_train.py`: Trains the ALIF model on GSC.
+
+Initial and trained models and evaluation plots are saved in the `gsc-experiments/` directory. Note that TensorBoard logs are excluded from this due to storage constraints.
+
+### GSC Setup Instructions
+Create a new GSC-specific virtual environment and install the GSC-specific dependencies:
+```bash
+python3.10 -m venv gsc-venv
+gsc-venv/Scripts/activate  # Windows:
+pip install -r gsc-experiments/gsc-requirements.txt
+```
+
+### Running Experiments
+To run an experiment:
+```bash
+python gsc/train/gsc_brf_train.py   # BRF model
+python gsc/train/gsc_rf_train.py    # RF model
+python gsc/train/gsc_alif_train.py  # ALIF model
+```
 
 ## Citation
 

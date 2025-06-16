@@ -11,7 +11,7 @@ import random
 
 class SpeechCommands(Dataset):
     """
-    A PyTorch dataset loader for the Google Speech Commands v0.02 dataset with in-memory caching
+    A PyTorch dataset loader for the Google Speech Commands v0.03 dataset with in-memory caching
     and percentage-based data sampling. Normalizes data during caching.
 
     Parameters:
