@@ -24,7 +24,7 @@ import random
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if device == "cuda":
+if device.type == "cuda":
     pin_memory = True
     num_workers = 1
 else:
