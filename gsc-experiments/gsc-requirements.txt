@@ -1,0 +1,9 @@
+matplotlib==3.10.3
+scipy==1.15.3
+soundfile==0.13.1
+tensorboard==2.19.0
+torch==2.7.1
+torchaudio==2.7.1
+torchvision==0.22.1
+tqdm==4.67.1
+-e .
