@@ -79,10 +79,10 @@ We extend the BRF neuron experiments specifically on the SMNIST dataset by addin
 
 - `experiments/`
   - `smnist/`
-    `smnist_train_spike_loss.py`
-  `SOP_inspection.ipynb`
+    - `smnist_train_spike_loss.py`
+  - `SOP_inspection.ipynb`
 
-The `smnist_train_spike_loss.py` works exactly the same as the `smnist_train.py` file, and the runs and models are stored at the same locations.
+The `smnist_train_spike_loss.py` works exactly the same as the `smnist_train.py` file, and the runs and models are stored at the same locations. In this file, the `lambda_spike` parameter can be tuned to explore different loss values. 
 
 The file `SOP_inspection.ipynb` can be used to inspect the energy efficiency of a model. 
 
