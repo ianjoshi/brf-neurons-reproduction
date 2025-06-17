@@ -9,6 +9,10 @@ def load_tensorboard_scalars(log_dir, tag="accuracy/test"):
     """
     ea = event_accumulator.EventAccumulator(log_dir)
     ea.Reload()
+
+    # print("Available tags:")
+    # print(ea.Tags()['scalars'])
+
     if tag not in ea.Tags()['scalars']:
         return None, None
     events = ea.Scalars(tag)
@@ -43,7 +47,7 @@ def plot_tensorboard_runs(base_dir, runs, dataset_name, output_dir, epochs=None)
 
     for run in runs:
         log_folder = os.path.join(base_dir, run['folder'])
-        tag = run.get('tag', 'accuracy/test')
+        tag = run.get('tag', 'Accuracy/test')
         steps, values = load_tensorboard_scalars(log_folder, tag)
         if steps is None or values is None:
             print(f"Skipping {run['label']} — No valid scalar '{tag}' found.")
@@ -70,27 +74,28 @@ def plot_tensorboard_runs(base_dir, runs, dataset_name, output_dir, epochs=None)
 
 
 if __name__ == "__main__":
-    base_dir = "experiments/ecg/runs"
-    dataset_name = "ECG"
+    base_dir = "experiments/smnist/runs"
+    dataset_name = "PSMNIST"
     output_dir = "experiments/plots"
-    epochs = 400
+    epochs = 150
 
     runs = [
+        # {
+        #     "folder": "May28_16-57-16_DESKTOP-JELMER3330_Adam(0.1),NLL,script-bw,LinLR,LL(False),PERMUTED(False),1,256,10,bs=256,ep=150,BRF_omega15.0_50.0b0.1_1.0,LI20.0_5.0",
+        #     "label": "RF",
+        #     "color": "#4a9600"
+        # },
         {
-            "folder": "May24_18-38-50_Inaesh-HP-ZBook7303_Adam(0.1),script-bw,NLL,LinearLR,no_gc,4,36,6,bs=16,ep=400,RF(omega3.0,5.0,b0.1,1.0)LI(20.0,1.0)",
-            "label": "RF",
-            "color": "#4a9600"
-        },
-        {
-            "folder": "May25_00-24-03_Inaesh-HP-ZBook8977_Adam(0.1),script-bw,NLL,LinearLR,no_gc,4,36,6,bs=16,ep=400,BRF(omega3.0,5.0,b0.1,1.0)LI(20.0,1.0)",
+            "folder": "May30_09-57-44_DESKTOP-JELMER7985_Adam(0.1),NLL,script-bw,LinLR,LL(False),PERMUTED(True),1,256,10,bs=256,ep=150,BRF_omega15.0_50.0b0.1_1.0,LI20.0_5.0",
             "label": "BRF",
             "color": "#EE4B2B"
         },
         {
-            "folder": "May25_11-35-53_Inaesh-HP-ZBook8709_Adam(0.05),NLL,LinearLR,no_gc,RSNN(4,36,6,sub_seq_10,bs_4,ep_400,h_o_bias(True)),ALIF(tau_m(20.0,0.5),tau_a(7.0,0.2),linMask_0.0)LI(tau_m(20.0,0.5))",
+            "folder": "May29_08-37-06_DESKTOP-JELMER3221_Adam(0.001),PERMUTED(True),LinearLR,NLL,LL(True),TBPTT(50),RSNN(1,256,10,bs_256,ep_150,h_o_bias),ALIF(tau_m(20.0,5.0),tau_a(200.0,50.0),linearMask(0.0))LI(tau_m(20.0,5.0))",
             "label": "ALIF",
             "color": "#0017ff"
         }
     ]
 
     plot_tensorboard_runs(base_dir, runs, dataset_name, output_dir, epochs)
+
