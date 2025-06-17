@@ -73,6 +73,24 @@ python gsc/train/gsc_rf_train.py    # RF model
 python gsc/train/gsc_alif_train.py  # ALIF model
 ```
 
+## Experiments with Energy aware loss
+
+We extend the BRF neuron experiments specifically on the SMNIST dataset by adding an energy aware loss. The code specific to this extension can be found in the `experiments` directory under:
+
+- `experiments/`
+  - `smnist/`
+    `smnist_train_spike_loss.py`
+  `SOP_inspection.ipynb`
+
+The `smnist_train_spike_loss.py` works exactly the same as the `smnist_train.py` file, and the runs and models are stored at the same locations.
+
+The file `SOP_inspection.ipynb` can be used to inspect the energy efficiency of a model. 
+
+To run the experiment:
+```bash
+python experiments/smnist/smnist_train_spike_loss.py
+```
+
 ## Citation
 
 If you use this code, please cite the original paper:
