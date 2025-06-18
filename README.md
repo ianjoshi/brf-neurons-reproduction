@@ -98,7 +98,11 @@ We extend the BRF neuron experiments specifically on the SHD and ECG datasets by
 - `snn/`
   - `modules_linear/`
 
-In order to run this code, the same files that are used to run standard SHD and ecg can be used, with one caveat: in the file /models/resonaternns.py, the line
+In order to run this code, the same files that are used to run standard SHD and ecg can be used, with one caveat: in the file 
+
+- `models/`
+  - `resonaternns.py`
+the line
 ```
 from .. import modules
 ```
